@@ -699,6 +699,34 @@ export default function Home() {
             </div>
           </nav>
 
+          {loggedIn && (
+            <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="terminal-tabs">
+                <span className="terminal-tab terminal-tab-active">Dashboard</span>
+                <span className="terminal-tab">Intelligence</span>
+                <span className="terminal-tab">Investigations</span>
+                <span className="terminal-tab">Graph</span>
+                {session?.role === "admin" && <span className="terminal-tab">Admin</span>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={onAckAll} disabled={alertBusy || alertUnread === 0 || session?.role === "viewer"} className="command-chip disabled:opacity-50">
+                  Clear alerts
+                </button>
+                <button onClick={onLoadCluster} disabled={!intelligence || loadingCluster} className="command-chip disabled:opacity-50">
+                  {loadingCluster ? "Loading graph…" : "Open graph"}
+                </button>
+                <button onClick={onExportCSV} disabled={csvBusy || session?.role === "viewer"} className="command-chip disabled:opacity-50">
+                  {csvBusy ? "Exporting…" : "Export intelligence"}
+                </button>
+                {session?.role === "admin" && (
+                  <button onClick={onRefreshInvites} disabled={inviteListBusy} className="command-chip disabled:opacity-50">
+                    {inviteListBusy ? "Refreshing…" : "Refresh admin ops"}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Login card — only when signed out ────────────────────────── */}
           {!loggedIn && (
             <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr] animate-fade-in-up">
@@ -957,6 +985,17 @@ export default function Home() {
           <StatCard accent="rose"   title="Critical Alerts"   value={`${dashboard?.critical_alerts_today ?? "…"}`}   icon={<BadgeDollarSign className="h-5 w-5 text-rose-300" />} />
           <StatCard accent="cyan"   title="Watched Wallets"   value={`${watchlist.length}`}                           icon={<Eye className="h-5 w-5 text-cyan-300" />} />
         </section>
+
+        {loggedIn && (
+          <section className="mt-4 terminal-strip rounded-2xl px-3 py-2.5">
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+              <SignalPill label="Priority wallet" value={topPriorityAlert?.address ?? primaryInvestigation?.address ?? "Awaiting signal"} tone="rose" mono />
+              <SignalPill label="Latest chain" value={topPriorityAlert?.chain ?? primaryInvestigation?.chain ?? "ethereum"} tone="cyan" />
+              <SignalPill label="Case score" value={primaryInvestigation ? `${primaryInvestigation.score}/100` : "—"} tone="indigo" />
+              <SignalPill label="Ops state" value={alertUnread > 0 ? `${alertUnread} alerts pending` : "Desk clear"} tone="amber" />
+            </div>
+          </section>
+        )}
 
         {/* Charts row */}
         <section className="mt-6 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
@@ -1532,7 +1571,7 @@ export default function Home() {
             </div>
             <div className="overflow-auto">
               <table className="min-w-full text-left text-sm">
-                <thead className="bg-slate-900/50 text-xs uppercase tracking-wide text-slate-400">
+                <thead className="sticky top-0 z-10 bg-slate-950/95 text-[10px] uppercase tracking-[0.22em] text-slate-500 backdrop-blur">
                   <tr>
                     <th className="px-5 py-3">Severity</th>
                     <th className="px-5 py-3">Chain</th>
@@ -1545,18 +1584,18 @@ export default function Home() {
                 </thead>
                 <tbody className="divide-y divide-slate-800/80 text-slate-200">
                   {dashboard?.alerts.map((alert) => (
-                    <tr key={alert.id} className="hover:bg-slate-900/35">
+                    <tr key={alert.id} className="group hover:bg-slate-900/50">
                       <td className="px-5 py-3">
                         <span className={cn("rounded-full border px-2 py-1 text-xs uppercase", riskTone(alert.severity))}>{alert.severity}</span>
                       </td>
                       <td className="px-5 py-3">
                         <span className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-1 text-[10px] uppercase text-cyan-200">{alert.chain}</span>
                       </td>
-                      <td className="px-5 py-3">{alert.title}</td>
-                      <td className="px-5 py-3 font-mono text-xs">{alert.wallet}</td>
-                      <td className="px-5 py-3">${Intl.NumberFormat("en-US").format(alert.amount_usd)}</td>
-                      <td className="px-5 py-3">{alert.score}</td>
-                      <td className="px-5 py-3 text-slate-300">{alert.summary}</td>
+                      <td className="px-5 py-3 text-sm font-medium text-slate-100">{alert.title}</td>
+                      <td className="px-5 py-3 font-mono text-[11px] text-slate-400">{alert.wallet}</td>
+                      <td className="px-5 py-3 text-sm text-slate-300">${Intl.NumberFormat("en-US").format(alert.amount_usd)}</td>
+                      <td className="px-5 py-3 text-sm font-semibold text-white">{alert.score}</td>
+                      <td className="px-5 py-3 text-[12px] text-slate-300 group-hover:text-slate-200">{alert.summary}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1684,6 +1723,22 @@ function OpsMetric({ label, value, tone }: { label: string; value: string; tone:
         <p className="mt-1 text-lg font-semibold text-white">{value}</p>
       </div>
       <span className={cn("rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase", toneClasses)}>{tone}</span>
+    </div>
+  );
+}
+
+function SignalPill({ label, value, tone, mono = false }: { label: string; value: string; tone: "indigo" | "cyan" | "rose" | "amber"; mono?: boolean }) {
+  const toneClasses = {
+    indigo: "border-indigo-500/20 bg-indigo-500/10 text-indigo-300",
+    cyan: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
+    rose: "border-rose-500/20 bg-rose-500/10 text-rose-300",
+    amber: "border-amber-500/20 bg-amber-500/10 text-amber-300",
+  }[tone];
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-950/35 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">{label}</p>
+      <span className={cn("rounded-full border px-2.5 py-1 text-[10px] font-semibold", toneClasses, mono && "font-mono")}>{value}</span>
     </div>
   );
 }
