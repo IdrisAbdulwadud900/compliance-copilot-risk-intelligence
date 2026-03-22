@@ -3,17 +3,22 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Activity,
+  Apple,
   AlertTriangle,
   BadgeDollarSign,
   Bell,
   BellOff,
   BookmarkPlus,
+  Chrome,
   ChevronDown,
   ChevronUp,
   Download,
   Eye,
   Globe,
+  LockKeyhole,
+  Phone,
   ShieldCheck,
+  Sparkles,
   Tag,
   Trash2,
   Webhook,
@@ -135,6 +140,10 @@ export default function Home() {
   const [auth, setAuth] = useState<LoginRequest>({ email: "founder@demo.local", password: "ChangeMe123!" });
   const [authError, setAuthError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [signupForm, setSignupForm] = useState({ email: "", phone: "" });
+  const [signupBusy, setSignupBusy] = useState(false);
+  const [signupMessage, setSignupMessage] = useState("");
   const [loggedIn, setLoggedIn] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [passwordForm, setPasswordForm] = useState<PasswordChangeRequest>({ current_password: "", new_password: "" });
@@ -295,6 +304,19 @@ export default function Home() {
       if (s) await refreshIntelPanels(s.role);
     } catch { setAuthError("Invalid email or password"); }
     finally { setIsLoggingIn(false); }
+  };
+
+  const onSignupEmail = async () => {
+    if (!signupForm.email.trim()) { setSignupMessage("Email is required."); return; }
+    setSignupBusy(true);
+    setSignupMessage("");
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    setSignupMessage("Signup request captured. Use Sign in for the demo account now.");
+    setSignupBusy(false);
+  };
+
+  const onSocialSignup = (provider: "Google" | "Apple" | "Phone") => {
+    setSignupMessage(`${provider} signup UI is ready. Backend OAuth/OTP hookup is next.`);
   };
 
   const onLogout = async () => {
@@ -559,55 +581,151 @@ export default function Home() {
 
           {/* ── Login card — only when signed out ────────────────────────── */}
           {!loggedIn && (
-            <div className="mx-auto max-w-sm animate-fade-in-up">
-              <div className="glass rounded-2xl p-7">
-                <div className="mb-6 text-center">
-                  <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30">
-                    <ShieldCheck className="h-5 w-5 text-white" />
-                  </div>
-                  <h2 className="text-lg font-semibold text-white">Sign in to your workspace</h2>
-                  <p className="mt-0.5 text-xs text-slate-500">Compliance Copilot · Risk Intelligence</p>
-                </div>
-                <div className="space-y-3.5">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-400">Email</label>
-                    <input
-                      value={auth.email}
-                      onChange={(e) => setAuth((s) => ({ ...s, email: e.target.value }))}
-                      onKeyDown={(e) => { if (e.key === "Enter") onLogin(); }}
-                      placeholder="founder@demo.local"
-                      className="input-field"
-                    />
+            <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr] animate-fade-in-up">
+              <article className="glass relative overflow-hidden rounded-3xl p-7">
+                <span className="hero-orb hero-orb-indigo" />
+                <span className="hero-orb hero-orb-cyan" />
+                <div className="relative z-10 space-y-5">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/35 bg-indigo-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-300">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Real-time AML intelligence
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-400">Password</label>
-                    <input
-                      value={auth.password}
-                      type="password"
-                      onChange={(e) => setAuth((s) => ({ ...s, password: e.target.value }))}
-                      onKeyDown={(e) => { if (e.key === "Enter") onLogin(); }}
-                      placeholder="••••••••"
-                      className="input-field"
-                    />
+                    <h2 className="text-3xl font-bold leading-tight text-white sm:text-4xl">Know wallet risk before money moves.</h2>
+                    <p className="mt-3 max-w-xl text-sm leading-relaxed text-slate-300">
+                      Compliance Copilot helps teams detect sanctions adjacency, mixer exposure, bridge-hop behavior, and suspicious wallet clusters in seconds.
+                    </p>
                   </div>
-                  <button
-                    onClick={onLogin}
-                    disabled={isLoggingIn}
-                    className="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:opacity-90 active:scale-[.98] disabled:opacity-60"
-                  >
-                    {isLoggingIn ? "Signing in…" : "Sign in →"}
-                  </button>
-                  {authError && (
-                    <div className="flex items-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
-                      <p className="text-xs text-rose-300">{authError}</p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-700/70 bg-slate-950/40 p-3">
+                      <p className="text-2xl font-bold text-white">37ms</p>
+                      <p className="text-[11px] text-slate-500">Fast scoring pipeline</p>
                     </div>
-                  )}
-                  <p className="text-center text-[10px] text-slate-600">
-                    Demo: <span className="text-slate-400">founder@demo.local / ChangeMe123!</span>
-                  </p>
+                    <div className="rounded-2xl border border-slate-700/70 bg-slate-950/40 p-3">
+                      <p className="text-2xl font-bold text-white">4+</p>
+                      <p className="text-[11px] text-slate-500">Behavior fingerprints</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-700/70 bg-slate-950/40 p-3">
+                      <p className="text-2xl font-bold text-white">24/7</p>
+                      <p className="text-[11px] text-slate-500">Watchlist alerting</p>
+                    </div>
+                  </div>
+                  <ul className="grid gap-2 text-xs text-slate-300 sm:grid-cols-2">
+                    <li className="inline-flex items-center gap-2"><LockKeyhole className="h-3.5 w-3.5 text-emerald-300" />Role-based access</li>
+                    <li className="inline-flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5 text-indigo-300" />Risk scoring engine</li>
+                    <li className="inline-flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-cyan-300" />Cross-chain support</li>
+                    <li className="inline-flex items-center gap-2"><Bell className="h-3.5 w-3.5 text-amber-300" />Live alert events</li>
+                  </ul>
                 </div>
-              </div>
+              </article>
+
+              <article className="glass rounded-3xl p-6 animate-scale-in">
+                <div className="mb-5 flex rounded-xl border border-slate-700 bg-slate-900/60 p-1">
+                  <button
+                    onClick={() => { setAuthMode("signin"); setSignupMessage(""); }}
+                    className={cn("flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition", authMode === "signin" ? "bg-indigo-500 text-white" : "text-slate-400 hover:text-slate-200")}
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    onClick={() => { setAuthMode("signup"); setAuthError(""); }}
+                    className={cn("flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition", authMode === "signup" ? "bg-violet-500 text-white" : "text-slate-400 hover:text-slate-200")}
+                  >
+                    Sign up
+                  </button>
+                </div>
+
+                {authMode === "signin" ? (
+                  <div className="space-y-3.5">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-slate-400">Email</label>
+                      <input
+                        value={auth.email}
+                        onChange={(e) => setAuth((s) => ({ ...s, email: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === "Enter") onLogin(); }}
+                        placeholder="founder@demo.local"
+                        className="input-field"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-slate-400">Password</label>
+                      <input
+                        value={auth.password}
+                        type="password"
+                        onChange={(e) => setAuth((s) => ({ ...s, password: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === "Enter") onLogin(); }}
+                        placeholder="••••••••"
+                        className="input-field"
+                      />
+                    </div>
+                    <button
+                      onClick={onLogin}
+                      disabled={isLoggingIn}
+                      className="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:opacity-90 active:scale-[.98] disabled:opacity-60"
+                    >
+                      {isLoggingIn ? "Signing in…" : "Sign in →"}
+                    </button>
+                    {authError && (
+                      <div className="flex items-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                        <p className="text-xs text-rose-300">{authError}</p>
+                      </div>
+                    )}
+                    <p className="text-center text-[10px] text-slate-600">
+                      Demo: <span className="text-slate-400">founder@demo.local / ChangeMe123!</span>
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Create your workspace</h3>
+                    <p className="mt-1 text-xs text-slate-500">Pick any onboarding method below.</p>
+
+                    <div className="mt-4 space-y-2.5">
+                      <label className="text-[11px] text-slate-400">Work email</label>
+                      <input
+                        value={signupForm.email}
+                        onChange={(e) => setSignupForm((s) => ({ ...s, email: e.target.value }))}
+                        placeholder="team@company.com"
+                        className="input-field"
+                      />
+                      <label className="text-[11px] text-slate-400">Phone number</label>
+                      <input
+                        value={signupForm.phone}
+                        onChange={(e) => setSignupForm((s) => ({ ...s, phone: e.target.value }))}
+                        placeholder="+1 234 567 8901"
+                        className="input-field"
+                      />
+                      <button
+                        onClick={onSignupEmail}
+                        disabled={signupBusy}
+                        className="w-full rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition hover:opacity-90 active:scale-[.98] disabled:opacity-60"
+                      >
+                        {signupBusy ? "Submitting…" : "Sign up with email"}
+                      </button>
+                    </div>
+
+                    <div className="my-4 flex items-center gap-3">
+                      <span className="h-px flex-1 bg-slate-800" />
+                      <span className="text-[10px] uppercase tracking-wider text-slate-600">or continue with</span>
+                      <span className="h-px flex-1 bg-slate-800" />
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <button onClick={() => onSocialSignup("Google")} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/70 px-2 py-2 text-xs text-slate-300 transition hover:border-slate-500 hover:text-white">
+                        <Chrome className="h-3.5 w-3.5" />Google
+                      </button>
+                      <button onClick={() => onSocialSignup("Apple")} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/70 px-2 py-2 text-xs text-slate-300 transition hover:border-slate-500 hover:text-white">
+                        <Apple className="h-3.5 w-3.5" />Apple
+                      </button>
+                      <button onClick={() => onSocialSignup("Phone")} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/70 px-2 py-2 text-xs text-slate-300 transition hover:border-slate-500 hover:text-white">
+                        <Phone className="h-3.5 w-3.5" />Phone
+                      </button>
+                    </div>
+
+                    {signupMessage && <p className="mt-3 text-xs text-cyan-300">{signupMessage}</p>}
+                  </div>
+                )}
+              </article>
             </div>
           )}
 

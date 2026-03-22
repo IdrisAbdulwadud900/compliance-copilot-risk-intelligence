@@ -158,3 +158,35 @@ body {
   border-radius: 0.5rem;
   flex-shrink: 0;
 }
+
+/* ── Welcome hero motion graphics ───────────────────────────────────────── */
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.hero-orb {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 9999px;
+  filter: blur(2px);
+  opacity: 0.32;
+  animation: float-y 4.6s ease-in-out infinite;
+}
+
+.hero-orb-indigo {
+  width: 13rem;
+  height: 13rem;
+  right: -2rem;
+  top: -2.2rem;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.65) 0%, rgba(99, 102, 241, 0.06) 60%, rgba(99, 102, 241, 0) 72%);
+}
+
+.hero-orb-cyan {
+  width: 10rem;
+  height: 10rem;
+  left: -1.2rem;
+  bottom: -1.4rem;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.58) 0%, rgba(34, 211, 238, 0.08) 60%, rgba(34, 211, 238, 0) 72%);
+  animation-delay: 0.8s;
+}
