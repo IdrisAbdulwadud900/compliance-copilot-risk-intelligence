@@ -190,3 +190,53 @@ body {
   background: radial-gradient(circle, rgba(34, 211, 238, 0.58) 0%, rgba(34, 211, 238, 0.08) 60%, rgba(34, 211, 238, 0) 72%);
   animation-delay: 0.8s;
 }
+
+/* ── Analyst console surfaces ───────────────────────────────────────────── */
+.terminal-panel {
+  position: relative;
+  border: 1px solid rgba(59, 130, 246, 0.14);
+  background:
+    linear-gradient(180deg, rgba(10, 14, 24, 0.94), rgba(6, 9, 18, 0.9)),
+    radial-gradient(circle at top right, rgba(99, 102, 241, 0.12), transparent 30%);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.58), inset 0 1px 0 rgba(148, 163, 184, 0.04);
+}
+
+.terminal-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.06), transparent 18%);
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.25); }
+  50% { opacity: 0.85; box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
+}
+
+.pulse-dot {
+  animation: pulse-soft 1.8s ease-in-out infinite;
+}
+
+.risk-ring {
+  width: 9rem;
+  height: 9rem;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(from 180deg, rgba(99,102,241,.95), rgba(34,211,238,.75), rgba(244,63,94,.85), rgba(99,102,241,.95));
+  padding: 1px;
+  box-shadow: 0 18px 40px rgba(30, 41, 59, 0.45);
+}
+
+.risk-ring-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.96));
+}

@@ -295,6 +295,55 @@ export default function Home() {
     [alertEvents, showUnackedOnly]
   );
 
+  const topPriorityAlert = useMemo(() => {
+    const ordered = [...visibleAlerts].sort((a, b) => {
+      const weight = { critical: 4, high: 3, medium: 2, low: 1 } as const;
+      const delta = weight[b.risk_level] - weight[a.risk_level];
+      if (delta !== 0) return delta;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+    return ordered[0] ?? null;
+  }, [visibleAlerts]);
+
+  const primaryInvestigation = useMemo(() => {
+    const recentAnalysis = analyses[0] ?? null;
+    if (!recentAnalysis) return null;
+    const relatedAlert = visibleAlerts.find((alert) => alert.address === recentAnalysis.address) ?? topPriorityAlert;
+    return {
+      address: recentAnalysis.address,
+      chain: recentAnalysis.chain,
+      riskLevel: recentAnalysis.risk_level,
+      score: recentAnalysis.score,
+      createdAt: recentAnalysis.created_at,
+      explanation: recentAnalysis.explanation,
+      tags: recentAnalysis.tags,
+      relatedAlert,
+    };
+  }, [analyses, topPriorityAlert, visibleAlerts]);
+
+  const missionHighlights = useMemo(() => {
+    return [
+      {
+        label: "Live Signals",
+        value: `${visibleAlerts.filter((alert) => !alert.acknowledged).length}`,
+        tone: "text-amber-300",
+        detail: "Unacknowledged risk events",
+      },
+      {
+        label: "Active Case",
+        value: primaryInvestigation ? `${primaryInvestigation.score}/100` : "—",
+        tone: "text-indigo-300",
+        detail: primaryInvestigation ? `${primaryInvestigation.chain} · ${primaryInvestigation.riskLevel}` : "No active case yet",
+      },
+      {
+        label: "Team Coverage",
+        value: session?.role === "admin" ? `${teamUsers.length || 1}` : `${watchlist.length}`,
+        tone: "text-cyan-300",
+        detail: session?.role === "admin" ? "Operators in workspace" : "Tracked entities",
+      },
+    ];
+  }, [primaryInvestigation, session?.role, teamUsers.length, visibleAlerts, watchlist.length]);
+
   // ─── Auth ──────────────────────────────────────────────────────────────────
 
   const onLogin = async () => {
@@ -833,22 +882,70 @@ export default function Home() {
 
           {/* ── Page title & change-password — only when signed in ──────── */}
           {loggedIn && (
-            <div className="space-y-4">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">Risk Intelligence Dashboard</h1>
-                <p className="mt-1 text-sm text-slate-400">Behavior fingerprinting · Wallet clustering · Real-time alerts</p>
-              </div>
-              <details className="rounded-xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
-                <summary className="cursor-pointer select-none text-xs font-medium text-slate-500 hover:text-slate-300">Change password</summary>
-                <div className="mt-3 space-y-2">
-                  <input type="password" value={passwordForm.current_password} onChange={(e) => setPasswordForm((s) => ({ ...s, current_password: e.target.value }))} placeholder="Current password" className="input-field" />
-                  <input type="password" value={passwordForm.new_password} onChange={(e) => setPasswordForm((s) => ({ ...s, new_password: e.target.value }))} placeholder="New password" className="input-field" />
-                  <button onClick={onChangePassword} disabled={passwordBusy} className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700 disabled:opacity-60">
-                    {passwordBusy ? "Updating…" : "Update password"}
-                  </button>
-                  {passwordMessage && <p className="text-xs text-slate-400">{passwordMessage}</p>}
+            <div className="space-y-5 animate-fade-in-up">
+              <section className="terminal-panel overflow-hidden rounded-3xl p-6">
+                <div className="grid gap-5 lg:grid-cols-[1.3fr_.9fr]">
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 pulse-dot" />
+                      Intelligence console online
+                    </div>
+                    <div>
+                      <h1 className="max-w-3xl text-3xl font-bold tracking-tight text-white sm:text-4xl">The analyst cockpit for high-velocity crypto investigations.</h1>
+                      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">
+                        Surface the highest-signal wallets, trace suspicious relationships, and move from alert to case decision in under five seconds.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {missionHighlights.map((item) => (
+                        <div key={item.label} className="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{item.label}</p>
+                          <p className={cn("mt-2 text-2xl font-bold", item.tone)}>{item.value}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">{item.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-2xl border border-slate-800/80 bg-slate-950/40 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Priority signal</p>
+                        <h2 className="mt-2 text-lg font-semibold text-white">{topPriorityAlert ? topPriorityAlert.title : "No urgent alerts"}</h2>
+                      </div>
+                      {topPriorityAlert && (
+                        <span className={cn("rounded-full border px-2 py-1 text-[10px] font-semibold uppercase", riskTone(topPriorityAlert.risk_level))}>
+                          {topPriorityAlert.risk_level}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs leading-relaxed text-slate-400">
+                      {topPriorityAlert ? topPriorityAlert.body : "System is clear. Run a wallet analysis or monitor the live stream for new events."}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                        <p className="text-slate-500">Chain</p>
+                        <p className="mt-1 font-medium text-white">{topPriorityAlert?.chain ?? "—"}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                        <p className="text-slate-500">Response</p>
+                        <p className="mt-1 font-medium text-white">{alertUnread > 0 ? `${alertUnread} pending` : "Cleared"}</p>
+                      </div>
+                    </div>
+                    <details className="rounded-xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
+                      <summary className="cursor-pointer select-none text-xs font-medium text-slate-500 hover:text-slate-300">Operator security</summary>
+                      <div className="mt-3 space-y-2">
+                        <input type="password" value={passwordForm.current_password} onChange={(e) => setPasswordForm((s) => ({ ...s, current_password: e.target.value }))} placeholder="Current password" className="input-field" />
+                        <input type="password" value={passwordForm.new_password} onChange={(e) => setPasswordForm((s) => ({ ...s, new_password: e.target.value }))} placeholder="New password" className="input-field" />
+                        <button onClick={onChangePassword} disabled={passwordBusy} className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700 disabled:opacity-60">
+                          {passwordBusy ? "Updating…" : "Update password"}
+                        </button>
+                        {passwordMessage && <p className="text-xs text-slate-400">{passwordMessage}</p>}
+                      </div>
+                    </details>
+                  </div>
                 </div>
-              </details>
+              </section>
             </div>
           )}
         </header>
@@ -911,6 +1008,92 @@ export default function Home() {
                   </ul>
                 </>
               ) : <div className="h-full w-full animate-pulse rounded-xl bg-slate-900/40" />}
+            </div>
+          </article>
+        </section>
+
+        {/* Investigation workspace */}
+        <section className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_.95fr]">
+          <article className="terminal-panel rounded-3xl p-5">
+            <div className="panel-header">
+              <span className="panel-header-icon bg-indigo-500/15">
+                <Activity className="h-4 w-4 text-indigo-300" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-white">Investigation Workspace</h2>
+                <p className="text-[10px] text-slate-500">High-signal case context and decision framing</p>
+              </div>
+            </div>
+            {primaryInvestigation ? (
+              <div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cn("rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase", riskTone(primaryInvestigation.riskLevel))}>{primaryInvestigation.riskLevel}</span>
+                      <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] uppercase text-cyan-300">{primaryInvestigation.chain}</span>
+                      <span className="ml-auto text-[10px] text-slate-500">{formatDistanceToNow(new Date(primaryInvestigation.createdAt), { addSuffix: true })}</span>
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-[auto_1fr] md:items-start">
+                      <div className="risk-ring">
+                        <div className="risk-ring-inner">
+                          <span className="text-3xl font-bold text-white">{primaryInvestigation.score}</span>
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">score</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="font-mono text-xs text-slate-300 break-all">{primaryInvestigation.address}</p>
+                        <p className="text-sm leading-relaxed text-slate-300">{primaryInvestigation.explanation}</p>
+                        {primaryInvestigation.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {primaryInvestigation.tags.map((tag) => (
+                              <span key={tag} className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-[10px] text-violet-200">{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-4">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Case timeline</p>
+                    <div className="mt-4 space-y-3">
+                      <TimelineRow title="Alert triggered" body={primaryInvestigation.relatedAlert?.title ?? "Latest analysis became active case"} tone={primaryInvestigation.riskLevel} />
+                      <TimelineRow title="Analyst explanation" body={primaryInvestigation.explanation.slice(0, 140)} tone="indigo" />
+                      <TimelineRow title="Recommended action" body={primaryInvestigation.relatedAlert ? `Escalate ${primaryInvestigation.relatedAlert.chain} flow review immediately.` : "Monitor relationship graph and tag investigation."} tone="cyan" />
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-800/80 bg-slate-950/45 p-4">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Decision frame</p>
+                    <div className="mt-3 grid gap-2 text-xs text-slate-300">
+                      <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2"><span>Open alerts</span><span className="font-semibold text-white">{visibleAlerts.length}</span></div>
+                      <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2"><span>Tracked entities</span><span className="font-semibold text-white">{watchlist.length}</span></div>
+                      <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2"><span>Analyses ready</span><span className="font-semibold text-white">{analyses.length}</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-950/40 p-5 text-sm text-slate-400">Run your first wallet analysis to populate the live investigation workspace.</div>
+            )}
+          </article>
+
+          <article className="glass rounded-3xl p-5">
+            <div className="panel-header">
+              <span className="panel-header-icon bg-cyan-500/15">
+                <ShieldCheck className="h-4 w-4 text-cyan-300" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-white">Operations Overview</h2>
+                <p className="text-[10px] text-slate-500">Team, access, and alert readiness</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <OpsMetric label="Unread alerts" value={`${alertUnread}`} tone="rose" />
+              <OpsMetric label="Watchlist coverage" value={`${watchlist.length}`} tone="cyan" />
+              <OpsMetric label="Team seats" value={`${teamUsers.length || (session ? 1 : 0)}`} tone="indigo" />
+              <OpsMetric label="Pending invites" value={`${invites.length}`} tone="amber" />
             </div>
           </article>
         </section>
@@ -1177,8 +1360,16 @@ export default function Home() {
             {session?.role === "admin" && (
               <>
                 {/* Audit Logs */}
-                <article className="glass rounded-2xl p-5">
-                  <h2 className="mb-3 text-base font-medium text-slate-100">Audit Logs</h2>
+                <article className="terminal-panel rounded-2xl p-5">
+                  <div className="panel-header">
+                    <span className="panel-header-icon bg-emerald-500/15">
+                      <ShieldCheck className="h-4 w-4 text-emerald-300" />
+                    </span>
+                    <div>
+                      <h2 className="text-sm font-semibold text-white">Audit Logs</h2>
+                      <p className="text-[10px] text-slate-500">Immutable operator activity stream</p>
+                    </div>
+                  </div>
                   <div className="max-h-40 space-y-2 overflow-auto pr-1">
                     {auditLogs.length === 0 ? <p className="text-xs text-slate-500">No logs yet.</p> : auditLogs.map((log) => (
                       <div key={log.id} className="rounded-lg border border-slate-800 bg-slate-900/50 p-2">
@@ -1190,10 +1381,15 @@ export default function Home() {
                 </article>
 
                 {/* Webhooks */}
-                <article className="glass rounded-2xl p-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <Webhook className="h-4 w-4 text-violet-300" />
-                    <h2 className="text-base font-medium text-slate-100">Webhooks</h2>
+                <article className="terminal-panel rounded-2xl p-5">
+                  <div className="panel-header">
+                    <span className="panel-header-icon bg-violet-500/15">
+                      <Webhook className="h-4 w-4 text-violet-300" />
+                    </span>
+                    <div>
+                      <h2 className="text-sm font-semibold text-white">Webhooks</h2>
+                      <p className="text-[10px] text-slate-500">Outbound automation and alert delivery</p>
+                    </div>
                   </div>
                   <div className="mb-3 space-y-2">
                     <input value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://your-server.com/webhook" className="w-full rounded-md border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-xs outline-none focus:ring focus:ring-violet-500" />
@@ -1226,8 +1422,16 @@ export default function Home() {
                 </article>
 
                 {/* Team management */}
-                <article className="glass rounded-2xl p-5">
-                  <h2 className="mb-3 text-base font-medium text-slate-100">Team Management</h2>
+                <article className="terminal-panel rounded-2xl p-5">
+                  <div className="panel-header">
+                    <span className="panel-header-icon bg-indigo-500/15">
+                      <ShieldCheck className="h-4 w-4 text-indigo-300" />
+                    </span>
+                    <div>
+                      <h2 className="text-sm font-semibold text-white">Team Management</h2>
+                      <p className="text-[10px] text-slate-500">Workspace access, invites, and operator roles</p>
+                    </div>
+                  </div>
                   <div className="mb-3 grid grid-cols-1 gap-2">
                     <input value={teamForm.email} onChange={(e) => setTeamForm((s) => ({ ...s, email: e.target.value }))} placeholder="new-user@company.com" className="w-full rounded-md border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-xs outline-none focus:ring focus:ring-indigo-500" />
                     <input type="password" value={teamForm.password} onChange={(e) => setTeamForm((s) => ({ ...s, password: e.target.value }))} placeholder="Temporary password" className="w-full rounded-md border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-xs outline-none focus:ring focus:ring-indigo-500" />
@@ -1316,9 +1520,15 @@ export default function Home() {
 
         {/* Recent Alerts table */}
         <section className="mt-6">
-          <article className="glass overflow-hidden rounded-2xl">
+          <article className="terminal-panel overflow-hidden rounded-3xl">
             <div className="border-b border-slate-800/80 px-5 py-4">
-              <h2 className="text-base font-medium text-slate-100">Recent Dashboard Alerts</h2>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-100">Recent Dashboard Alerts</h2>
+                  <p className="mt-1 text-[11px] text-slate-500">Fast triage table for analysts and investigators</p>
+                </div>
+                <span className="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-slate-400">{dashboard?.alerts.length ?? 0} rows</span>
+              </div>
             </div>
             <div className="overflow-auto">
               <table className="min-w-full text-left text-sm">
@@ -1387,7 +1597,7 @@ function ClusterGraph({ cluster }: { cluster: WalletClusterResponse }) {
   }, [cluster.nodes, cx, cy]);
 
   return (
-    <div className="rounded-xl border border-indigo-500/25 bg-slate-900/60 p-3">
+    <div className="terminal-panel rounded-2xl p-4">
       <button onClick={() => setExpanded((v) => !v)} className="mb-2 flex w-full items-center justify-between text-xs font-medium text-slate-300 hover:text-white">
         <span className="flex items-center gap-2">
           <Globe className="h-3.5 w-3.5 text-indigo-300" />
@@ -1398,13 +1608,14 @@ function ClusterGraph({ cluster }: { cluster: WalletClusterResponse }) {
       </button>
       {expanded && (
         <>
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/50 p-3">
           <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
             {cluster.edges.map((e: ClusterEdge, i: number) => {
               const s = nodePositions[e.source], t = nodePositions[e.target];
               if (!s || !t) return null;
               return (
                 <g key={i}>
-                  <line x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke="rgba(99,102,241,0.35)" strokeWidth={e.strength * 3} />
+                  <line x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke="rgba(99,102,241,0.45)" strokeWidth={e.strength * 3.2} />
                   <text x={(s.x + t.x) / 2} y={(s.y + t.y) / 2 - 4} textAnchor="middle" fontSize={8} fill="#6366f1" opacity={0.7}>{e.relation}</text>
                 </g>
               );
@@ -1416,6 +1627,7 @@ function ClusterGraph({ cluster }: { cluster: WalletClusterResponse }) {
                 <g key={n.address}>
                   <circle cx={pos.x} cy={pos.y} r={n.is_root ? NODE_R + 4 : NODE_R} fill={scoreColor(n.score)} opacity={0.18} />
                   <circle cx={pos.x} cy={pos.y} r={n.is_root ? NODE_R + 4 : NODE_R} fill="none" stroke={scoreColor(n.score)} strokeWidth={n.is_root ? 2.5 : 1.5} />
+                  <circle cx={pos.x} cy={pos.y} r={n.is_root ? NODE_R - 7 : NODE_R - 8} fill="rgba(15,23,42,0.96)" />
                   <text x={pos.x} y={pos.y - 4} textAnchor="middle" fontSize={9} fill="white" fontWeight="600">{n.score}</text>
                   <text x={pos.x} y={pos.y + 9} textAnchor="middle" fontSize={7} fill="#94a3b8">{n.address.slice(0, 8)}…</text>
                   {n.is_root && <text x={pos.x} y={pos.y + 19} textAnchor="middle" fontSize={7} fill="#818cf8">ROOT</text>}
@@ -1423,7 +1635,8 @@ function ClusterGraph({ cluster }: { cluster: WalletClusterResponse }) {
               );
             })}
           </svg>
-          <p className="mt-2 text-[10px] leading-relaxed text-slate-400">{cluster.narrative}</p>
+          </div>
+          <p className="mt-3 text-[10px] leading-relaxed text-slate-400">{cluster.narrative}</p>
         </>
       )}
     </div>
@@ -1431,6 +1644,49 @@ function ClusterGraph({ cluster }: { cluster: WalletClusterResponse }) {
 }
 
 // ─── Shared components ────────────────────────────────────────────────────────
+
+function TimelineRow({ title, body, tone }: { title: string; body: string; tone: "low" | "medium" | "high" | "critical" | "indigo" | "cyan" }) {
+  const toneClass = {
+    low: "bg-emerald-400",
+    medium: "bg-amber-400",
+    high: "bg-orange-400",
+    critical: "bg-rose-400",
+    indigo: "bg-indigo-400",
+    cyan: "bg-cyan-400",
+  }[tone];
+
+  return (
+    <div className="flex gap-3">
+      <div className="flex flex-col items-center">
+        <span className={cn("mt-1 h-2.5 w-2.5 rounded-full", toneClass)} />
+        <span className="mt-1 h-full w-px bg-slate-800" />
+      </div>
+      <div className="pb-3">
+        <p className="text-xs font-medium text-white">{title}</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function OpsMetric({ label, value, tone }: { label: string; value: string; tone: "indigo" | "cyan" | "rose" | "amber" }) {
+  const toneClasses = {
+    indigo: "border-indigo-500/25 bg-indigo-500/10 text-indigo-300",
+    cyan: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300",
+    rose: "border-rose-500/25 bg-rose-500/10 text-rose-300",
+    amber: "border-amber-500/25 bg-amber-500/10 text-amber-300",
+  }[tone];
+
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/45 p-3">
+      <div>
+        <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">{label}</p>
+        <p className="mt-1 text-lg font-semibold text-white">{value}</p>
+      </div>
+      <span className={cn("rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase", toneClasses)}>{tone}</span>
+    </div>
+  );
+}
 
 function StatCard({ title, value, icon, accent = "indigo" }: { title: string; value: string; icon: React.ReactNode; accent?: "indigo" | "amber" | "rose" | "cyan" }) {
   const iconBg: Record<string, string> = {
