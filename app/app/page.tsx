@@ -16,7 +16,10 @@ import {
   Eye,
   Globe,
   LockKeyhole,
+  PanelRightClose,
+  PanelRightOpen,
   Phone,
+  Search,
   ShieldCheck,
   Sparkles,
   Tag,
@@ -201,6 +204,9 @@ export default function Home() {
   const [alertUnread, setAlertUnread] = useState(0);
   const [alertBusy, setAlertBusy] = useState(false);
   const [showUnackedOnly, setShowUnackedOnly] = useState(false);
+  const [commandRailCollapsed, setCommandRailCollapsed] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState("");
 
   // Webhooks
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([]);
@@ -343,6 +349,38 @@ export default function Home() {
       },
     ];
   }, [primaryInvestigation, session?.role, teamUsers.length, visibleAlerts, watchlist.length]);
+
+  const tickerItems = useMemo(() => {
+    const items = [
+      topPriorityAlert
+        ? `PRIORITY · ${topPriorityAlert.chain.toUpperCase()} · ${topPriorityAlert.risk_level.toUpperCase()} · ${topPriorityAlert.address.slice(0, 10)}…`
+        : "PRIORITY · No active critical signal",
+      primaryInvestigation
+        ? `CASE SCORE · ${primaryInvestigation.score}/100 · ${primaryInvestigation.riskLevel.toUpperCase()}`
+        : "CASE SCORE · Waiting for first investigation",
+      `WATCHLIST · ${watchlist.length} tracked entities`,
+      `LIVE ALERTS · ${alertUnread} unread · ${visibleAlerts.length} visible`,
+      `TEAM · ${teamUsers.length || (session ? 1 : 0)} operators online`,
+    ];
+    return items;
+  }, [alertUnread, primaryInvestigation, session, teamUsers.length, topPriorityAlert, visibleAlerts.length, watchlist.length]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isMetaK = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+      if (isMetaK) {
+        event.preventDefault();
+        setCommandPaletteOpen((open) => !open);
+      }
+      if (event.key === "Escape") {
+        setCommandPaletteOpen(false);
+        setCommandQuery("");
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // ─── Auth ──────────────────────────────────────────────────────────────────
 
@@ -637,11 +675,40 @@ export default function Home() {
     finally { setWebhookBusy(false); }
   };
 
+  const commandItems = [
+    { label: "Run intelligence", action: () => void onAnalyze(), enabled: session?.role !== "viewer" },
+    { label: loadingCluster ? "Loading graph" : "Open relationship graph", action: () => void onLoadCluster(), enabled: Boolean(intelligence) },
+    { label: "Add active wallet to watchlist", action: () => void onQuickWatch(), enabled: Boolean(intelligence && session?.role !== "viewer") },
+    { label: "Acknowledge all alerts", action: () => void onAckAll(), enabled: alertUnread > 0 && session?.role !== "viewer" },
+    { label: csvBusy ? "Exporting intelligence" : "Export intelligence CSV", action: () => void onExportCSV(), enabled: session?.role !== "viewer" },
+    { label: "Refresh admin operations", action: () => void onRefreshInvites(), enabled: session?.role === "admin" },
+  ].filter((item) => item.enabled && item.label.toLowerCase().includes(commandQuery.toLowerCase()));
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="premium-shell min-h-screen grid-bg">
       <main className="relative z-10 mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {loggedIn && (
+          <aside className={cn("command-rail fixed right-4 top-32 z-20 hidden xl:block", commandRailCollapsed ? "command-rail-collapsed" : "command-rail-open")}>
+            <div className="command-rail-inner">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                {!commandRailCollapsed && <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Quick ops</p>}
+                <button onClick={() => setCommandRailCollapsed((v) => !v)} className="rounded-lg border border-slate-800 bg-slate-950/60 p-2 text-slate-400 hover:text-white">
+                  {commandRailCollapsed ? <PanelRightOpen className="h-3.5 w-3.5" /> : <PanelRightClose className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+              <div className="space-y-2">
+                {commandItems.slice(0, 5).map((item) => (
+                  <button key={item.label} onClick={item.action} className={cn("rail-action", commandRailCollapsed && "rail-action-collapsed")} title={item.label}>
+                    <Zap className="h-3.5 w-3.5 shrink-0" />
+                    {!commandRailCollapsed && <span>{item.label}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </aside>
+        )}
 
         {/* Header */}
         {/* ── Top Navigation ───────────────────────────────────────────────── */}
@@ -700,13 +767,30 @@ export default function Home() {
           </nav>
 
           {loggedIn && (
+            <div className="ticker-shell mb-4 overflow-hidden rounded-2xl">
+              <div className="ticker-track">
+                {[...tickerItems, ...tickerItems].map((item, index) => (
+                  <span key={`${item}-${index}`} className="ticker-item">{item}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {loggedIn && (
             <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="terminal-tabs">
-                <span className="terminal-tab terminal-tab-active">Dashboard</span>
-                <span className="terminal-tab">Intelligence</span>
-                <span className="terminal-tab">Investigations</span>
-                <span className="terminal-tab">Graph</span>
-                {session?.role === "admin" && <span className="terminal-tab">Admin</span>}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="terminal-tabs">
+                  <span className="terminal-tab terminal-tab-active">Dashboard</span>
+                  <span className="terminal-tab">Intelligence</span>
+                  <span className="terminal-tab">Investigations</span>
+                  <span className="terminal-tab">Graph</span>
+                  {session?.role === "admin" && <span className="terminal-tab">Admin</span>}
+                </div>
+                <button onClick={() => setCommandPaletteOpen(true)} className="command-chip inline-flex items-center gap-2">
+                  <Search className="h-3.5 w-3.5" />
+                  Command Palette
+                  <span className="rounded-md border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-500">⌘K</span>
+                </button>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button onClick={onAckAll} disabled={alertBusy || alertUnread === 0 || session?.role === "viewer"} className="command-chip disabled:opacity-50">
@@ -723,6 +807,10 @@ export default function Home() {
                     {inviteListBusy ? "Refreshing…" : "Refresh admin ops"}
                   </button>
                 )}
+                <button onClick={() => setCommandRailCollapsed((v) => !v)} className="command-chip inline-flex items-center gap-2">
+                  {commandRailCollapsed ? <PanelRightOpen className="h-3.5 w-3.5" /> : <PanelRightClose className="h-3.5 w-3.5" />}
+                  {commandRailCollapsed ? "Expand rail" : "Collapse rail"}
+                </button>
               </div>
             </div>
           )}
@@ -1604,6 +1692,38 @@ export default function Home() {
           </article>
         </section>
 
+        {commandPaletteOpen && loggedIn && (
+          <div className="palette-overlay" onClick={() => { setCommandPaletteOpen(false); setCommandQuery(""); }}>
+            <div className="palette-panel" onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-3">
+                <Search className="h-4 w-4 text-slate-500" />
+                <input
+                  autoFocus
+                  value={commandQuery}
+                  onChange={(e) => setCommandQuery(e.target.value)}
+                  placeholder="Search actions, workflows, or tools…"
+                  className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-600"
+                />
+                <button onClick={() => { setCommandPaletteOpen(false); setCommandQuery(""); }} className="rounded-md border border-slate-800 px-2 py-1 text-[10px] text-slate-500 hover:text-white">ESC</button>
+              </div>
+              <div className="max-h-80 overflow-auto p-3">
+                {commandItems.length === 0 ? (
+                  <p className="rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3 text-sm text-slate-500">No matching commands.</p>
+                ) : commandItems.map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => { item.action(); setCommandPaletteOpen(false); setCommandQuery(""); }}
+                    className="mb-2 flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-950/45 px-3 py-3 text-left hover:border-indigo-500/35 hover:bg-slate-900/80"
+                  >
+                    <span className="text-sm font-medium text-white">{item.label}</span>
+                    <span className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Run</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );
@@ -1613,6 +1733,7 @@ export default function Home() {
 
 function ClusterGraph({ cluster }: { cluster: WalletClusterResponse }) {
   const [expanded, setExpanded] = useState(true);
+  const [hoveredNode, setHoveredNode] = useState<ClusterNode | null>(null);
   const W = 480, H = 220, NODE_R = 28;
   const cx = W / 2, cy = H / 2;
 
@@ -1663,7 +1784,7 @@ function ClusterGraph({ cluster }: { cluster: WalletClusterResponse }) {
               const pos = nodePositions[n.address];
               if (!pos) return null;
               return (
-                <g key={n.address}>
+                <g key={n.address} onMouseEnter={() => setHoveredNode(n)} onMouseLeave={() => setHoveredNode((current) => current?.address === n.address ? null : current)}>
                   <circle cx={pos.x} cy={pos.y} r={n.is_root ? NODE_R + 4 : NODE_R} fill={scoreColor(n.score)} opacity={0.18} />
                   <circle cx={pos.x} cy={pos.y} r={n.is_root ? NODE_R + 4 : NODE_R} fill="none" stroke={scoreColor(n.score)} strokeWidth={n.is_root ? 2.5 : 1.5} />
                   <circle cx={pos.x} cy={pos.y} r={n.is_root ? NODE_R - 7 : NODE_R - 8} fill="rgba(15,23,42,0.96)" />
@@ -1675,6 +1796,24 @@ function ClusterGraph({ cluster }: { cluster: WalletClusterResponse }) {
             })}
           </svg>
           </div>
+          {hoveredNode && (
+            <div className="mt-3 rounded-2xl border border-slate-800/80 bg-slate-950/45 p-3 text-xs text-slate-300">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={cn("rounded-full border px-2 py-1 text-[10px] uppercase", riskTone(hoveredNode.risk_level))}>{hoveredNode.risk_level}</span>
+                <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[10px] uppercase text-cyan-300">{hoveredNode.chain}</span>
+                {hoveredNode.is_root && <span className="rounded-full border border-indigo-500/25 bg-indigo-500/10 px-2 py-1 text-[10px] uppercase text-indigo-300">root node</span>}
+              </div>
+              <p className="mt-2 break-all font-mono text-[11px] text-slate-400">{hoveredNode.address}</p>
+              <p className="mt-2 text-sm font-semibold text-white">Risk score {hoveredNode.score}</p>
+              {hoveredNode.fingerprints.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {hoveredNode.fingerprints.map((fingerprint) => (
+                    <span key={fingerprint} className="rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-1 text-[10px] text-violet-200">{fingerprint}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <p className="mt-3 text-[10px] leading-relaxed text-slate-400">{cluster.narrative}</p>
         </>
       )}
