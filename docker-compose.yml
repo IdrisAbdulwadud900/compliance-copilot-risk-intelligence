@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: compliance_backend
+    ports:
+      - "8000:8000"
+    environment:
+      COMPLIANCE_DB_PATH: /data/compliance.db
+      COMPLIANCE_JWT_SECRET: ${COMPLIANCE_JWT_SECRET:-your-secret-key-change-in-prod}
+    volumes:
+      - compliance_data:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: compliance_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  compliance_data:
+    driver: local
+
+networks:
+  default:
+    name: compliance_network
