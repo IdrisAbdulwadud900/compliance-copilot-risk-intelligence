@@ -169,6 +169,37 @@ class LoginResponse(BaseModel):
     role: UserRole
 
 
+class SignupEmailRequest(BaseModel):
+    email: str = Field(min_length=5)
+    password: str = Field(min_length=8)
+    role: UserRole = "analyst"
+
+
+class OAuthSignupRequest(BaseModel):
+    provider: Literal["google", "apple"]
+    email: str = Field(min_length=5)
+
+
+class PhoneSignupStartRequest(BaseModel):
+    phone: str = Field(min_length=7, max_length=32)
+
+
+class PhoneSignupVerifyRequest(BaseModel):
+    phone: str = Field(min_length=7, max_length=32)
+    code: str = Field(min_length=4, max_length=8)
+
+
+class SignupBootstrapResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    message: str
+
+
+class PhoneSignupStartResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    message: str
+    code_hint: str
+
+
 class WalletScore(BaseModel):
     address: str
     score: int

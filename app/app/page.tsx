@@ -64,7 +64,11 @@ import {
   login,
   removeFromWatchlist,
   revokeInvite,
+  signupWithEmail,
+  signupWithOAuth,
+  startPhoneSignup,
   updateAnalysisTags,
+  verifyPhoneSignup,
 } from "@/lib/api";
 import type {
   AlertEvent,
@@ -141,7 +145,7 @@ export default function Home() {
   const [authError, setAuthError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
-  const [signupForm, setSignupForm] = useState({ email: "", phone: "" });
+  const [signupForm, setSignupForm] = useState({ email: "", password: "", phone: "", code: "" });
   const [signupBusy, setSignupBusy] = useState(false);
   const [signupMessage, setSignupMessage] = useState("");
   const [loggedIn, setLoggedIn] = useState(false);
@@ -306,17 +310,84 @@ export default function Home() {
     finally { setIsLoggingIn(false); }
   };
 
-  const onSignupEmail = async () => {
-    if (!signupForm.email.trim()) { setSignupMessage("Email is required."); return; }
-    setSignupBusy(true);
-    setSignupMessage("");
-    await new Promise((resolve) => window.setTimeout(resolve, 500));
-    setSignupMessage("Signup request captured. Use Sign in for the demo account now.");
-    setSignupBusy(false);
+  const onAuthSuccess = async () => {
+    setLoggedIn(true);
+    const s = getSessionInfo();
+    setSession(s);
+    const [dash, hist] = await Promise.all([getDashboard(), getAnalyses(20)]);
+    setDashboard(dash);
+    setAnalyses(hist);
+    if (s) await refreshIntelPanels(s.role);
   };
 
-  const onSocialSignup = (provider: "Google" | "Apple" | "Phone") => {
-    setSignupMessage(`${provider} signup UI is ready. Backend OAuth/OTP hookup is next.`);
+  const onSignupEmail = async () => {
+    if (!signupForm.email.trim() || !signupForm.password.trim()) {
+      setSignupMessage("Email and password are required.");
+      return;
+    }
+    setSignupBusy(true);
+    setSignupMessage("");
+    try {
+      await signupWithEmail({ email: signupForm.email.trim(), password: signupForm.password, role: "analyst" });
+      setSignupMessage("Account created. Signed in successfully.");
+      await onAuthSuccess();
+    } catch {
+      setSignupMessage("Could not sign up with email.");
+    } finally {
+      setSignupBusy(false);
+    }
+  };
+
+  const onSocialSignup = async (provider: "Google" | "Apple") => {
+    if (!signupForm.email.trim()) {
+      setSignupMessage("Enter your email first.");
+      return;
+    }
+    setSignupBusy(true);
+    setSignupMessage("");
+    try {
+      const resp = await signupWithOAuth({ provider: provider.toLowerCase() as "google" | "apple", email: signupForm.email.trim() });
+      setSignupMessage(resp.message);
+    } catch {
+      setSignupMessage(`${provider} signup setup failed.`);
+    } finally {
+      setSignupBusy(false);
+    }
+  };
+
+  const onPhoneStart = async () => {
+    if (!signupForm.phone.trim()) {
+      setSignupMessage("Enter your phone number first.");
+      return;
+    }
+    setSignupBusy(true);
+    setSignupMessage("");
+    try {
+      const resp = await startPhoneSignup({ phone: signupForm.phone.trim() });
+      setSignupMessage(`${resp.message} Code hint: ${resp.code_hint}`);
+    } catch {
+      setSignupMessage("Could not send verification code.");
+    } finally {
+      setSignupBusy(false);
+    }
+  };
+
+  const onPhoneVerify = async () => {
+    if (!signupForm.phone.trim() || !signupForm.code.trim()) {
+      setSignupMessage("Phone and verification code are required.");
+      return;
+    }
+    setSignupBusy(true);
+    setSignupMessage("");
+    try {
+      await verifyPhoneSignup({ phone: signupForm.phone.trim(), code: signupForm.code.trim() });
+      setSignupMessage("Phone verified. Signed in successfully.");
+      await onAuthSuccess();
+    } catch {
+      setSignupMessage("Phone verification failed.");
+    } finally {
+      setSignupBusy(false);
+    }
   };
 
   const onLogout = async () => {
@@ -688,11 +759,26 @@ export default function Home() {
                         placeholder="team@company.com"
                         className="input-field"
                       />
+                      <label className="text-[11px] text-slate-400">Create password</label>
+                      <input
+                        value={signupForm.password}
+                        type="password"
+                        onChange={(e) => setSignupForm((s) => ({ ...s, password: e.target.value }))}
+                        placeholder="At least 8 characters"
+                        className="input-field"
+                      />
                       <label className="text-[11px] text-slate-400">Phone number</label>
                       <input
                         value={signupForm.phone}
                         onChange={(e) => setSignupForm((s) => ({ ...s, phone: e.target.value }))}
                         placeholder="+1 234 567 8901"
+                        className="input-field"
+                      />
+                      <label className="text-[11px] text-slate-400">Verification code</label>
+                      <input
+                        value={signupForm.code}
+                        onChange={(e) => setSignupForm((s) => ({ ...s, code: e.target.value }))}
+                        placeholder="Enter OTP code"
                         className="input-field"
                       />
                       <button
@@ -702,6 +788,22 @@ export default function Home() {
                       >
                         {signupBusy ? "Submitting…" : "Sign up with email"}
                       </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={onPhoneStart}
+                          disabled={signupBusy}
+                          className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-500/20 disabled:opacity-60"
+                        >
+                          Send phone code
+                        </button>
+                        <button
+                          onClick={onPhoneVerify}
+                          disabled={signupBusy}
+                          className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20 disabled:opacity-60"
+                        >
+                          Verify phone
+                        </button>
+                      </div>
                     </div>
 
                     <div className="my-4 flex items-center gap-3">
@@ -717,8 +819,8 @@ export default function Home() {
                       <button onClick={() => onSocialSignup("Apple")} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/70 px-2 py-2 text-xs text-slate-300 transition hover:border-slate-500 hover:text-white">
                         <Apple className="h-3.5 w-3.5" />Apple
                       </button>
-                      <button onClick={() => onSocialSignup("Phone")} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/70 px-2 py-2 text-xs text-slate-300 transition hover:border-slate-500 hover:text-white">
-                        <Phone className="h-3.5 w-3.5" />Phone
+                      <button onClick={onPhoneStart} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/70 px-2 py-2 text-xs text-slate-300 transition hover:border-slate-500 hover:text-white">
+                        <Phone className="h-3.5 w-3.5" />Phone OTP
                       </button>
                     </div>
 

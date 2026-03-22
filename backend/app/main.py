@@ -1,8 +1,9 @@
 from contextlib import asynccontextmanager
+import secrets
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timezone
-from typing import cast
+from datetime import datetime, timedelta, timezone
+from typing import Dict, cast
 
 from app.ai_explainer import explain_alert
 from app.auth import get_current_principal, get_current_role, get_current_tenant, login_and_issue_token
@@ -50,6 +51,12 @@ from app.schemas import (
     LoginRequest,
     LoginResponse,
     PasswordChangeRequest,
+    PhoneSignupStartRequest,
+    PhoneSignupStartResponse,
+    PhoneSignupVerifyRequest,
+    OAuthSignupRequest,
+    SignupBootstrapResponse,
+    SignupEmailRequest,
     TagUpdateRequest,
     UserRole,
     TeamUser,
@@ -68,6 +75,14 @@ from app.schemas import (
     WebhookConfigPayload,
     WalletClusterResponse,
 )
+
+_pending_phone_codes: Dict[str, tuple[str, datetime]] = {}
+
+
+def _tenant_from_email(email: str) -> str:
+    domain = (email.split("@", 1)[1] if "@" in email else "demo.local").strip().lower()
+    safe = "".join(c if c.isalnum() else "-" for c in domain).strip("-")
+    return f"tenant-{safe or 'demo'}"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -112,6 +127,144 @@ def auth_login(payload: LoginRequest, request: Request) -> LoginResponse:
         created_at=created_at,
     )
     return LoginResponse(access_token=token, tenant_id=tenant_id, email=email, role=role)
+
+
+@app.post("/auth/signup", response_model=LoginResponse)
+def auth_signup(payload: SignupEmailRequest, request: Request) -> LoginResponse:
+    client_ip = get_request_ip(request)
+    enforce_rate_limit("auth", f"signup:{client_ip}")
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    tenant_id = _tenant_from_email(payload.email)
+    normalized_email = payload.email.strip().lower()
+
+    create_user_if_not_exists(
+        email=normalized_email,
+        password=payload.password,
+        tenant_id=tenant_id,
+        role=payload.role,
+        created_at=created_at,
+    )
+
+    result = login_and_issue_token(normalized_email, payload.password)
+    if not result:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unable to create account")
+
+    token, email, tenant_id, role = result
+    save_audit_log(
+        tenant_id=tenant_id,
+        actor_email=email,
+        action="auth.signup",
+        target=email,
+        details=f"New account created via email signup role={role}",
+        created_at=created_at,
+    )
+    return LoginResponse(access_token=token, tenant_id=tenant_id, email=email, role=role)
+
+
+@app.post("/auth/signup/oauth", response_model=SignupBootstrapResponse)
+def auth_signup_oauth(payload: OAuthSignupRequest, request: Request) -> SignupBootstrapResponse:
+    client_ip = get_request_ip(request)
+    enforce_rate_limit("auth", f"oauth_signup:{client_ip}")
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    tenant_id = _tenant_from_email(payload.email)
+    normalized_email = payload.email.strip().lower()
+    temp_password = f"oauth-{payload.provider}-{secrets.token_urlsafe(12)}"
+
+    create_user_if_not_exists(
+        email=normalized_email,
+        password=temp_password,
+        tenant_id=tenant_id,
+        role="analyst",
+        created_at=created_at,
+    )
+
+    save_audit_log(
+        tenant_id=tenant_id,
+        actor_email=normalized_email,
+        action=f"auth.signup.{payload.provider}",
+        target=normalized_email,
+        details=f"OAuth bootstrap created for provider={payload.provider}",
+        created_at=created_at,
+    )
+    return SignupBootstrapResponse(
+        message=f"{payload.provider.capitalize()} signup bootstrap completed. Please sign in with your email and password flow until full OAuth redirect is enabled.",
+    )
+
+
+@app.post("/auth/signup/phone/start", response_model=PhoneSignupStartResponse)
+def auth_signup_phone_start(payload: PhoneSignupStartRequest, request: Request) -> PhoneSignupStartResponse:
+    client_ip = get_request_ip(request)
+    enforce_rate_limit("auth", f"phone_start:{client_ip}")
+
+    phone = payload.phone.strip()
+    code = f"{secrets.randbelow(900000) + 100000}"
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    _pending_phone_codes[phone] = (code, expires_at)
+    return PhoneSignupStartResponse(
+        message="Verification code generated. Use this code in the verify step.",
+        code_hint=f"demo-{code}",
+    )
+
+
+@app.post("/auth/signup/phone/verify", response_model=LoginResponse)
+def auth_signup_phone_verify(payload: PhoneSignupVerifyRequest, request: Request) -> LoginResponse:
+    client_ip = get_request_ip(request)
+    enforce_rate_limit("auth", f"phone_verify:{client_ip}")
+
+    phone = payload.phone.strip()
+    pending = _pending_phone_codes.get(phone)
+    if not pending:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No verification request for this phone")
+
+    expected_code, expires_at = pending
+    if datetime.now(timezone.utc) > expires_at:
+        _pending_phone_codes.pop(phone, None)
+        from fastapi import HTTPException, status
+
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification code expired")
+
+    if payload.code.strip() != expected_code:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid verification code")
+
+    normalized_phone = "".join(ch for ch in phone if ch.isdigit()) or "user"
+    email = f"phone-{normalized_phone}@phone.demo"
+    tenant_id = "tenant-phone"
+    created_at = datetime.now(timezone.utc).isoformat()
+    bootstrap_password = f"phone-{normalized_phone}-verified"
+
+    create_user_if_not_exists(
+        email=email,
+        password=bootstrap_password,
+        tenant_id=tenant_id,
+        role="analyst",
+        created_at=created_at,
+    )
+
+    result = login_and_issue_token(email, bootstrap_password)
+    if not result:
+        from fastapi import HTTPException, status
+
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Phone verification failed")
+
+    token, login_email, login_tenant, role = result
+    _pending_phone_codes.pop(phone, None)
+    save_audit_log(
+        tenant_id=login_tenant,
+        actor_email=login_email,
+        action="auth.signup.phone",
+        target=login_email,
+        details="Account verified via phone code",
+        created_at=created_at,
+    )
+    return LoginResponse(access_token=token, tenant_id=login_tenant, email=login_email, role=role)
 
 
 @app.post("/auth/accept-invite", response_model=LoginResponse)

@@ -12,8 +12,14 @@ import type {
   InviteResponse,
   LoginRequest,
   LoginResponse,
+  OAuthSignupRequest,
   PasswordChangeRequest,
+  PhoneSignupStartRequest,
+  PhoneSignupStartResponse,
+  PhoneSignupVerifyRequest,
   SessionInfo,
+  SignupBootstrapResponse,
+  SignupEmailRequest,
   TeamUser,
   TeamUserCreateRequest,
   TeamUserListPayload,
@@ -66,6 +72,18 @@ export function getSessionInfo(): SessionInfo | null {
     return JSON.parse(raw) as SessionInfo;
   } catch {
     return null;
+  }
+}
+
+function persistSession(data: LoginResponse): void {
+  saveAuthToken(data.access_token);
+  if (typeof window !== "undefined") {
+    const session: SessionInfo = {
+      email: data.email,
+      tenant_id: data.tenant_id,
+      role: data.role,
+    };
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }
 }
 
@@ -194,15 +212,67 @@ export async function login(payload: LoginRequest): Promise<LoginResponse> {
   }
 
   const data = (await response.json()) as LoginResponse;
-  saveAuthToken(data.access_token);
-  if (typeof window !== "undefined") {
-    const session: SessionInfo = {
-      email: data.email,
-      tenant_id: data.tenant_id,
-      role: data.role,
-    };
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  persistSession(data);
+  return data;
+}
+
+export async function signupWithEmail(payload: SignupEmailRequest): Promise<LoginResponse> {
+  const response = await fetch(`${API_BASE}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Signup failed: ${response.status}`);
   }
+
+  const data = (await response.json()) as LoginResponse;
+  persistSession(data);
+  return data;
+}
+
+export async function signupWithOAuth(payload: OAuthSignupRequest): Promise<SignupBootstrapResponse> {
+  const response = await fetch(`${API_BASE}/auth/signup/oauth`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OAuth signup bootstrap failed: ${response.status}`);
+  }
+
+  return (await response.json()) as SignupBootstrapResponse;
+}
+
+export async function startPhoneSignup(payload: PhoneSignupStartRequest): Promise<PhoneSignupStartResponse> {
+  const response = await fetch(`${API_BASE}/auth/signup/phone/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Phone signup start failed: ${response.status}`);
+  }
+
+  return (await response.json()) as PhoneSignupStartResponse;
+}
+
+export async function verifyPhoneSignup(payload: PhoneSignupVerifyRequest): Promise<LoginResponse> {
+  const response = await fetch(`${API_BASE}/auth/signup/phone/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Phone signup verify failed: ${response.status}`);
+  }
+
+  const data = (await response.json()) as LoginResponse;
+  persistSession(data);
   return data;
 }
 

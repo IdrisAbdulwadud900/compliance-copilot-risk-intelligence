@@ -185,6 +185,37 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface SignupEmailRequest {
+  email: string;
+  password: string;
+  role?: UserRole;
+}
+
+export interface OAuthSignupRequest {
+  provider: "google" | "apple";
+  email: string;
+}
+
+export interface SignupBootstrapResponse {
+  status: "ok";
+  message: string;
+}
+
+export interface PhoneSignupStartRequest {
+  phone: string;
+}
+
+export interface PhoneSignupStartResponse {
+  status: "ok";
+  message: string;
+  code_hint: string;
+}
+
+export interface PhoneSignupVerifyRequest {
+  phone: string;
+  code: string;
+}
+
 export interface LoginResponse {
   access_token: string;
   token_type: string;
