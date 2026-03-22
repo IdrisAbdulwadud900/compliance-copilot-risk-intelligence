@@ -502,57 +502,143 @@ export default function Home() {
       <main className="relative z-10 mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
 
         {/* Header */}
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Risk Intelligence</h1>
-            <p className="mt-1 text-sm text-slate-400">Behavior fingerprinting · Wallet clustering · Real-time alerts</p>
-          </div>
-          <div className="glass flex flex-col gap-2 rounded-xl px-4 py-3 text-sm text-slate-200 sm:min-w-72">
-            <div className="flex items-center justify-between">
-              <div className="inline-flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-300" />
-                {loggedIn ? "Session Active" : "API key mode"}
+        {/* ── Top Navigation ───────────────────────────────────────────────── */}
+        <header className="mb-8">
+          <nav className="mb-6 flex items-center justify-between">
+            {/* Brand */}
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30">
+                <ShieldCheck className="h-5 w-5 text-white" />
               </div>
-              <div className="flex items-center gap-2">
-                {alertUnread > 0 && (
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white">{alertUnread}</span>
-                )}
-                {loggedIn && (
-                  <button onClick={onLogout} className="rounded-md border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800">Logout</button>
-                )}
+              <div>
+                <p className="text-base font-bold tracking-tight text-white leading-none">Compliance Copilot</p>
+                <p className="text-[11px] text-slate-400 leading-none mt-0.5">Risk Intelligence Platform</p>
               </div>
             </div>
-            {!loggedIn ? (
-              <>
-                <input value={auth.email} onChange={(e) => setAuth((s) => ({ ...s, email: e.target.value }))} placeholder="Email" className="w-full rounded-md border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-xs outline-none focus:ring focus:ring-indigo-500" />
-                <input value={auth.password} type="password" onChange={(e) => setAuth((s) => ({ ...s, password: e.target.value }))} placeholder="Password" className="w-full rounded-md border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-xs outline-none focus:ring focus:ring-indigo-500" />
-                <button onClick={onLogin} disabled={isLoggingIn} className="rounded-md bg-indigo-500 px-2 py-1.5 text-xs font-medium text-white hover:bg-indigo-400 disabled:opacity-60">
-                  {isLoggingIn ? "Signing in…" : "Sign in"}
-                </button>
-                {authError && <p className="text-xs text-rose-300">{authError}</p>}
-              </>
-            ) : (
-              <div className="space-y-2">
-                <div className="rounded-md border border-slate-700 bg-slate-900/70 px-2 py-1.5 text-xs">
-                  {session ? `${session.email} · ${session.role}` : "Authenticated"}
+
+            {/* Right side */}
+            <div className="flex items-center gap-2.5">
+              {alertUnread > 0 && (
+                <div className="flex items-center gap-1.5 rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1.5">
+                  <Bell className="h-3.5 w-3.5 text-rose-300" />
+                  <span className="text-xs font-semibold text-rose-200">{alertUnread} unread</span>
                 </div>
-                <input type="password" value={passwordForm.current_password} onChange={(e) => setPasswordForm((s) => ({ ...s, current_password: e.target.value }))} placeholder="Current password" className="w-full rounded-md border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-xs outline-none focus:ring focus:ring-indigo-500" />
-                <input type="password" value={passwordForm.new_password} onChange={(e) => setPasswordForm((s) => ({ ...s, new_password: e.target.value }))} placeholder="New password" className="w-full rounded-md border border-slate-700 bg-slate-900/80 px-2 py-1.5 text-xs outline-none focus:ring focus:ring-indigo-500" />
-                <button onClick={onChangePassword} disabled={passwordBusy} className="rounded-md bg-slate-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-slate-600 disabled:opacity-60">
-                  {passwordBusy ? "Updating…" : "Change password"}
-                </button>
-                {passwordMessage && <p className="text-xs text-slate-300">{passwordMessage}</p>}
+              )}
+              {loggedIn && session ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/70 px-3 py-1.5 text-xs">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-[10px] font-bold text-white">
+                      {session.email[0].toUpperCase()}
+                    </span>
+                    <span className="max-w-[140px] truncate text-slate-300">{session.email}</span>
+                    <span className={cn(
+                      "rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+                      session.role === "admin"   && "bg-violet-500/25 text-violet-300",
+                      session.role === "analyst" && "bg-indigo-500/20 text-indigo-300",
+                      session.role === "viewer"  && "bg-slate-700/60 text-slate-400",
+                    )}>
+                      {session.role}
+                    </span>
+                  </div>
+                  <button
+                    onClick={onLogout}
+                    className="flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-400 transition hover:border-rose-500/50 hover:text-rose-300 active:scale-95"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    Sign out
+                  </button>
+                </div>
+              ) : !loggedIn ? (
+                <div className="flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-500">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                  API key mode
+                </div>
+              ) : null}
+            </div>
+          </nav>
+
+          {/* ── Login card — only when signed out ────────────────────────── */}
+          {!loggedIn && (
+            <div className="mx-auto max-w-sm animate-fade-in-up">
+              <div className="glass rounded-2xl p-7">
+                <div className="mb-6 text-center">
+                  <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30">
+                    <ShieldCheck className="h-5 w-5 text-white" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-white">Sign in to your workspace</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">Compliance Copilot · Risk Intelligence</p>
+                </div>
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-400">Email</label>
+                    <input
+                      value={auth.email}
+                      onChange={(e) => setAuth((s) => ({ ...s, email: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === "Enter") onLogin(); }}
+                      placeholder="founder@demo.local"
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-400">Password</label>
+                    <input
+                      value={auth.password}
+                      type="password"
+                      onChange={(e) => setAuth((s) => ({ ...s, password: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === "Enter") onLogin(); }}
+                      placeholder="••••••••"
+                      className="input-field"
+                    />
+                  </div>
+                  <button
+                    onClick={onLogin}
+                    disabled={isLoggingIn}
+                    className="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:opacity-90 active:scale-[.98] disabled:opacity-60"
+                  >
+                    {isLoggingIn ? "Signing in…" : "Sign in →"}
+                  </button>
+                  {authError && (
+                    <div className="flex items-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                      <p className="text-xs text-rose-300">{authError}</p>
+                    </div>
+                  )}
+                  <p className="text-center text-[10px] text-slate-600">
+                    Demo: <span className="text-slate-400">founder@demo.local / ChangeMe123!</span>
+                  </p>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* ── Page title & change-password — only when signed in ──────── */}
+          {loggedIn && (
+            <div className="space-y-4">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-white">Risk Intelligence Dashboard</h1>
+                <p className="mt-1 text-sm text-slate-400">Behavior fingerprinting · Wallet clustering · Real-time alerts</p>
+              </div>
+              <details className="rounded-xl border border-slate-800/80 bg-slate-900/40 px-4 py-3">
+                <summary className="cursor-pointer select-none text-xs font-medium text-slate-500 hover:text-slate-300">Change password</summary>
+                <div className="mt-3 space-y-2">
+                  <input type="password" value={passwordForm.current_password} onChange={(e) => setPasswordForm((s) => ({ ...s, current_password: e.target.value }))} placeholder="Current password" className="input-field" />
+                  <input type="password" value={passwordForm.new_password} onChange={(e) => setPasswordForm((s) => ({ ...s, new_password: e.target.value }))} placeholder="New password" className="input-field" />
+                  <button onClick={onChangePassword} disabled={passwordBusy} className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700 disabled:opacity-60">
+                    {passwordBusy ? "Updating…" : "Update password"}
+                  </button>
+                  {passwordMessage && <p className="text-xs text-slate-400">{passwordMessage}</p>}
+                </div>
+              </details>
+            </div>
+          )}
         </header>
 
         {/* Stat cards */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Wallets Monitored" value={`${dashboard?.total_wallets_monitored ?? "…"}`} icon={<Activity className="h-4 w-4 text-indigo-300" />} />
-          <StatCard title="Alerts Today" value={`${dashboard?.alerts_today ?? "…"}`} icon={<AlertTriangle className="h-4 w-4 text-amber-300" />} />
-          <StatCard title="Critical Alerts" value={`${dashboard?.critical_alerts_today ?? "…"}`} icon={<BadgeDollarSign className="h-4 w-4 text-rose-300" />} />
-          <StatCard title="Watched Wallets" value={`${watchlist.length}`} icon={<Eye className="h-4 w-4 text-cyan-300" />} />
+          <StatCard accent="indigo" title="Wallets Monitored" value={`${dashboard?.total_wallets_monitored ?? "…"}`} icon={<Activity className="h-5 w-5 text-indigo-300" />} />
+          <StatCard accent="amber"  title="Alerts Today"      value={`${dashboard?.alerts_today ?? "…"}`}            icon={<AlertTriangle className="h-5 w-5 text-amber-300" />} />
+          <StatCard accent="rose"   title="Critical Alerts"   value={`${dashboard?.critical_alerts_today ?? "…"}`}   icon={<BadgeDollarSign className="h-5 w-5 text-rose-300" />} />
+          <StatCard accent="cyan"   title="Watched Wallets"   value={`${watchlist.length}`}                           icon={<Eye className="h-5 w-5 text-cyan-300" />} />
         </section>
 
         {/* Charts row */}
@@ -615,8 +701,13 @@ export default function Home() {
           {/* ── Intelligence panel ─────────────────────────────────────────── */}
           <article className="glass rounded-2xl p-5">
             <div className="mb-4 flex items-center gap-2">
-              <Zap className="h-4 w-4 text-amber-300" />
-              <h2 className="text-base font-medium text-slate-100">Wallet Intelligence</h2>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15">
+                <Zap className="h-4 w-4 text-amber-300" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-white">Wallet Intelligence</h2>
+                <p className="text-[10px] text-slate-500">Fingerprint &amp; behavioral scoring</p>
+              </div>
             </div>
             <div className="space-y-3 text-sm">
               <div>
@@ -634,7 +725,7 @@ export default function Home() {
                 <FormInput label="Bridge hops" type="number" value={walletInput.bridge_hops} onChange={(v) => setWalletInput((s) => ({ ...s, bridge_hops: Number(v) || 0 }))} />
               </div>
 
-              <button onClick={onAnalyze} disabled={loadingIntel || session?.role === "viewer"} className="w-full rounded-lg bg-indigo-500 px-4 py-2 font-medium text-white transition hover:bg-indigo-400 disabled:opacity-60">
+              <button onClick={onAnalyze} disabled={loadingIntel || session?.role === "viewer"} className="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 px-4 py-2.5 font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:opacity-90 active:scale-[.98] disabled:opacity-60">
                 {session?.role === "viewer" ? "Read-only mode" : loadingIntel ? "Analyzing…" : "⚡ Run Intelligence"}
               </button>
               {intelError && <p className="text-xs text-rose-300">{intelError}</p>}
@@ -643,9 +734,13 @@ export default function Home() {
               {intelligence && (
                 <div className="space-y-3 rounded-xl border border-slate-700/60 bg-slate-900/60 p-3">
                   {/* Header */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={cn("rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", riskTone(intelligence.risk_level))}>{intelligence.risk_level}</span>
-                    <span className="text-xs text-slate-300">Score: <strong className="text-white">{intelligence.score}</strong>/100</span>
+                  {/* Header */}
+                  <div className="flex flex-wrap items-center gap-2.5 border-b border-slate-700/40 pb-3">
+                    <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider", riskTone(intelligence.risk_level))}>{intelligence.risk_level}</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-bold text-white">{intelligence.score}</span>
+                      <span className="text-xs text-slate-500">/100</span>
+                    </div>
                     <span className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-[10px] uppercase text-cyan-200">{intelligence.chain}</span>
                     <span className="ml-auto text-[10px] text-slate-500">#{intelligence.analysis_id}</span>
                   </div>
@@ -774,10 +869,15 @@ export default function Home() {
 
             {/* Watchlist */}
             <article className="glass rounded-2xl p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Eye className="h-4 w-4 text-cyan-300" />
-                <h2 className="text-base font-medium text-slate-100">Watchlist</h2>
-                <span className="ml-auto rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">{watchlist.length}</span>
+              <div className="panel-header">
+                <span className="panel-header-icon bg-cyan-500/15">
+                  <Eye className="h-4 w-4 text-cyan-300" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-white">Watchlist</h2>
+                  <p className="text-[10px] text-slate-500">Monitored addresses</p>
+                </div>
+                <span className="ml-auto rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[10px] text-slate-400">{watchlist.length}</span>
               </div>
               {session?.role !== "viewer" && (
                 <div className="mb-3 space-y-2">
@@ -815,9 +915,14 @@ export default function Home() {
 
             {/* Alert Events */}
             <article className="glass rounded-2xl p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Bell className="h-4 w-4 text-amber-300" />
-                <h2 className="text-base font-medium text-slate-100">Alert Events</h2>
+              <div className="panel-header">
+                <span className="panel-header-icon bg-amber-500/15">
+                  <Bell className="h-4 w-4 text-amber-300" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-white">Alert Events</h2>
+                  <p className="text-[10px] text-slate-500">Real-time risk signals</p>
+                </div>
                 {alertUnread > 0 && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white">{alertUnread}</span>}
                 <div className="ml-auto flex items-center gap-2">
                   <button onClick={() => setShowUnackedOnly((v) => !v)} title="Toggle unread" className={cn("rounded-md border px-2 py-1 text-[10px]", showUnackedOnly ? "border-amber-500/50 bg-amber-500/10 text-amber-200" : "border-slate-700 text-slate-400 hover:bg-slate-800")}>
@@ -830,7 +935,7 @@ export default function Home() {
               </div>
               <div className="max-h-64 space-y-2 overflow-auto pr-1">
                 {visibleAlerts.length === 0 ? <p className="text-xs text-slate-500">{showUnackedOnly ? "No unread alerts." : "No alerts yet."}</p> : visibleAlerts.map((alert) => (
-                  <div key={alert.id} className={cn("rounded-lg border p-2.5", alert.acknowledged ? "border-slate-800 bg-slate-900/40 opacity-60" : "border-amber-500/25 bg-amber-500/5")}>
+                  <div key={alert.id} className={cn("rounded-lg border p-2.5 pl-3.5", alert.acknowledged ? "border-slate-800 bg-slate-900/40 opacity-60" : cn("border-slate-700/50 bg-slate-900/50", "alert-" + alert.risk_level))}>
                     <div className="mb-1 flex items-start justify-between gap-2">
                       <p className="text-[11px] font-medium leading-snug text-slate-100">{alert.title}</p>
                       {!alert.acknowledged && session?.role !== "viewer" && (
@@ -1107,14 +1212,18 @@ function ClusterGraph({ cluster }: { cluster: WalletClusterResponse }) {
 
 // ─── Shared components ────────────────────────────────────────────────────────
 
-function StatCard({ title, value, icon }: { title: string; value: string; icon: React.ReactNode }) {
+function StatCard({ title, value, icon, accent = "indigo" }: { title: string; value: string; icon: React.ReactNode; accent?: "indigo" | "amber" | "rose" | "cyan" }) {
+  const iconBg: Record<string, string> = {
+    indigo: "bg-indigo-500/15 text-indigo-300",
+    amber:  "bg-amber-500/15  text-amber-300",
+    rose:   "bg-rose-500/15   text-rose-300",
+    cyan:   "bg-cyan-500/15   text-cyan-300",
+  };
   return (
-    <article className="glass rounded-2xl p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-slate-300">{title}</span>
-        <span className="rounded-md bg-slate-900/60 p-1.5">{icon}</span>
-      </div>
-      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
+    <article className={cn("hover-lift rounded-2xl border p-5 backdrop-blur-md", "stat-" + accent)}>
+      <div className={cn("inline-flex rounded-xl p-2.5", iconBg[accent])}>{icon}</div>
+      <p className="mt-4 text-3xl font-bold tracking-tight text-white">{value}</p>
+      <p className="mt-1.5 text-xs font-medium text-slate-400">{title}</p>
     </article>
   );
 }
@@ -1122,8 +1231,8 @@ function StatCard({ title, value, icon }: { title: string; value: string; icon: 
 function FormInput({ label, value, onChange, type = "text" }: { label: string; value: string | number; onChange: (v: string) => void; type?: "text" | "number" }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-slate-400">{label}</span>
-      <input value={value} type={type} onChange={(e) => onChange(e.target.value)} className="w-full rounded-md border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 outline-none ring-indigo-400 transition focus:ring" />
+      <span className="mb-1.5 block text-xs font-medium text-slate-400">{label}</span>
+      <input value={value} type={type} onChange={(e) => onChange(e.target.value)} className="input-field" />
     </label>
   );
 }
