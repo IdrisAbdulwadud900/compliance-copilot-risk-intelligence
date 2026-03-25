@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import secrets
 from pathlib import Path
+import bcrypt as _bcrypt_lib
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
@@ -206,23 +207,24 @@ def init_db(db_path: Optional[str] = None) -> None:
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000
-    ).hex()
-    return f"{salt}${digest}"
+    return _bcrypt_lib.hashpw(password.encode("utf-8"), _bcrypt_lib.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
+    # Support legacy PBKDF2-HMAC-SHA256 hashes (format: <salt_hex>$<digest_hex>)
+    if not password_hash.startswith("$2"):
+        try:
+            salt, expected = password_hash.split("$", 1)
+            digest = hashlib.pbkdf2_hmac(
+                "sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000
+            ).hex()
+            return hmac.compare_digest(digest, expected)
+        except (ValueError, Exception):
+            return False
     try:
-        salt, expected = password_hash.split("$", 1)
-    except ValueError:
+        return _bcrypt_lib.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except Exception:
         return False
-
-    digest = hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000
-    ).hex()
-    return hmac.compare_digest(digest, expected)
 
 
 def create_user(

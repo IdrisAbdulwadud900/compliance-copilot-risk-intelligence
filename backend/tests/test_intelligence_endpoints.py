@@ -39,7 +39,7 @@ def test_intelligence_watchlist_alerts_webhooks_cluster_flow(tmp_path, monkeypat
             headers=admin_headers,
             json={
                 "chain": "bsc",
-                "address": "0xAABBCCDD11223344",
+                "address": "0xaabbccdd11223344aabbccdd11223344aabbccdd",
                 "label": "Suspect wallet",
                 "alert_on_activity": True,
             },
@@ -53,7 +53,7 @@ def test_intelligence_watchlist_alerts_webhooks_cluster_flow(tmp_path, monkeypat
             headers=admin_headers,
             json={
                 "chain": "bsc",
-                "address": "0xAABBCCDD11223344",
+                "address": "0xaabbccdd11223344aabbccdd11223344aabbccdd",
                 "txn_24h": 500,
                 "volume_24h_usd": 900000,
                 "sanctions_exposure_pct": 35,
@@ -64,7 +64,7 @@ def test_intelligence_watchlist_alerts_webhooks_cluster_flow(tmp_path, monkeypat
         assert intelligence.status_code == 200
         intel_data = intelligence.json()
         assert intel_data["analysis_id"] > 0
-        assert intel_data["address"] == "0xAABBCCDD11223344"
+        assert intel_data["address"] == "0xaabbccdd11223344aabbccdd11223344aabbccdd"
         assert isinstance(intel_data["fingerprints"], list)
         assert "recommended_action" in intel_data["narrative"]
 
@@ -74,7 +74,7 @@ def test_intelligence_watchlist_alerts_webhooks_cluster_flow(tmp_path, monkeypat
         alert_payload = alerts.json()
         assert isinstance(alert_payload["items"], list)
         assert alert_payload["unread_count"] >= 1
-        hit = next((a for a in alert_payload["items"] if a["address"] == "0xAABBCCDD11223344"), None)
+        hit = next((a for a in alert_payload["items"] if a["address"] == "0xaabbccdd11223344aabbccdd11223344aabbccdd"), None)
         assert hit is not None
 
         # Acknowledge alert
@@ -82,10 +82,10 @@ def test_intelligence_watchlist_alerts_webhooks_cluster_flow(tmp_path, monkeypat
         assert ack.status_code == 200
 
         # Cluster endpoint
-        cluster = client.get("/wallets/0xAABBCCDD11223344/cluster?chain=bsc", headers=admin_headers)
+        cluster = client.get("/wallets/0xaabbccdd11223344aabbccdd11223344aabbccdd/cluster?chain=bsc", headers=admin_headers)
         assert cluster.status_code == 200
         cluster_data = cluster.json()
-        assert cluster_data["root_address"] == "0xAABBCCDD11223344"
+        assert cluster_data["root_address"] == "0xaabbccdd11223344aabbccdd11223344aabbccdd"
         assert len(cluster_data["nodes"]) >= 1
         assert any(node["is_root"] for node in cluster_data["nodes"])
 
@@ -128,7 +128,7 @@ def test_viewer_cannot_perform_restricted_intelligence_actions(tmp_path, monkeyp
             headers=viewer_headers,
             json={
                 "chain": "ethereum",
-                "address": "0xABCDEF1122334455",
+                "address": "0xabcdef1122334455aabbccddeeff001122334455",
                 "txn_24h": 10,
                 "volume_24h_usd": 1000,
                 "sanctions_exposure_pct": 0,
@@ -143,7 +143,7 @@ def test_viewer_cannot_perform_restricted_intelligence_actions(tmp_path, monkeyp
             headers=viewer_headers,
             json={
                 "chain": "ethereum",
-                "address": "0xABCDEF1122334455",
+                "address": "0xabcdef1122334455aabbccddeeff001122334455",
                 "label": "viewer attempt",
                 "alert_on_activity": True,
             },
