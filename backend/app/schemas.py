@@ -1,5 +1,35 @@
-from pydantic import BaseModel, Field
+import re
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Literal, Optional
+
+# EVM: 0x + exactly 40 hex chars (case-insensitive)
+_EVM_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+# Solana: base58 alphabet, 32–44 chars
+_SOLANA_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
+_EVM_CHAINS = frozenset({"ethereum", "arbitrum", "base", "bsc", "polygon"})
+
+
+def _validate_wallet_address(chain: str, address: str) -> str:
+    """Validate and sanitize a wallet address for the given chain."""
+    # Strip surrounding whitespace
+    address = address.strip()
+    # Reject addresses with embedded whitespace or null bytes
+    if any(c in address for c in (" ", "\t", "\n", "\r", "\x00")):
+        raise ValueError("Wallet address must not contain whitespace or control characters")
+    if chain in _EVM_CHAINS:
+        if not _EVM_RE.match(address):
+            raise ValueError(
+                f"Invalid EVM address for chain '{chain}': expected 0x followed by 40 hex characters"
+            )
+        return address.lower()  # normalise to lowercase hex
+    if chain == "solana":
+        if not _SOLANA_RE.match(address):
+            raise ValueError(
+                "Invalid Solana address: expected 32–44 base58 characters"
+            )
+        return address  # Solana addresses are case-sensitive
+    # Unknown chain — pass through after basic sanitisation
+    return address
 
 RiskLevel = Literal["low", "medium", "high", "critical"]
 UserRole = Literal["admin", "analyst", "viewer"]
@@ -63,6 +93,11 @@ class WatchlistAddRequest(BaseModel):
     address: str = Field(min_length=8)
     label: str = Field(min_length=1, max_length=80)
     alert_on_activity: bool = True
+
+    @model_validator(mode="after")
+    def validate_address(self) -> "WatchlistAddRequest":
+        self.address = _validate_wallet_address(self.chain, self.address)
+        return self
 
 
 class WatchlistPayload(BaseModel):
@@ -154,6 +189,11 @@ class WalletInput(BaseModel):
     sanctions_exposure_pct: float = Field(ge=0, le=100)
     mixer_exposure_pct: float = Field(ge=0, le=100)
     bridge_hops: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_address(self) -> "WalletInput":
+        self.address = _validate_wallet_address(self.chain, self.address)
+        return self
 
 
 class LoginRequest(BaseModel):

@@ -4,7 +4,7 @@ from app.schemas import WalletInput
 
 def test_high_risk_wallet_scores_high():
     wallet = WalletInput(
-        address="0xAABBCCDD11223344",
+        address="0xaabbccdd11223344aabbccdd11223344aabbccdd",
         txn_24h=440,
         volume_24h_usd=2_200_000,
         sanctions_exposure_pct=28,
@@ -18,7 +18,7 @@ def test_high_risk_wallet_scores_high():
 
 def test_low_risk_wallet_scores_low():
     wallet = WalletInput(
-        address="0x1122AABB3344CCDD",
+        address="0x1122aabb3344ccdd1122aabb3344ccdd1122aabb",
         txn_24h=10,
         volume_24h_usd=800,
         sanctions_exposure_pct=0,
@@ -32,7 +32,7 @@ def test_low_risk_wallet_scores_low():
 
 def test_chain_multiplier_increases_bsc_risk_vs_ethereum():
     base = dict(
-        address="0xFACEB00C11223344",
+        address="0xfaceb00c11223344faceb00c11223344faceb00c",
         txn_24h=150,
         volume_24h_usd=300000,
         sanctions_exposure_pct=6,

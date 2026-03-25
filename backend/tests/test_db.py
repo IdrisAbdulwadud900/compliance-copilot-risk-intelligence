@@ -7,7 +7,7 @@ def test_save_and_list_analysis(tmp_path):
     init_db(db_path)
 
     wallet = WalletInput(
-        address="0xABCDEF1122334455",
+        address="0xabcdef1122334455aabbccddeeff001122334455",
         txn_24h=88,
         volume_24h_usd=120000,
         sanctions_exposure_pct=3,
