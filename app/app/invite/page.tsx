@@ -123,6 +123,7 @@ export default function InvitePage() {
                 placeholder="Minimum 10 characters"
                 autoComplete="new-password"
               />
+              <p className="mt-1 text-[11px] text-slate-400">Use at least 10 characters.</p>
             </div>
 
             {error ? <p className="text-xs text-rose-300">{error}</p> : null}

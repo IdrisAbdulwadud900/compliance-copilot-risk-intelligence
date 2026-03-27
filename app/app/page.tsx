@@ -859,8 +859,8 @@ export default function Home() {
       setSignupMessage("Enter a valid email address.");
       return;
     }
-    if (signupForm.password.length < 8) {
-      setSignupMessage("Password must be at least 8 characters.");
+    if (signupForm.password.length < 10) {
+      setSignupMessage("Password must be at least 10 characters.");
       return;
     }
     if (signupForm.password !== signupForm.confirmPassword) {

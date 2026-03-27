@@ -167,3 +167,20 @@ def test_duplicate_signup_returns_conflict(tmp_path, monkeypatch):
     assert first.status_code == 200
     assert second.status_code == 409
     assert "already exists" in second.json()["detail"].lower()
+
+
+def test_signup_rejects_short_password(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "short_signup.db")
+    monkeypatch.setenv("COMPLIANCE_DB_PATH", db_path)
+    monkeypatch.delenv("COMPLIANCE_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("COMPLIANCE_ADMIN_PASSWORD", raising=False)
+    monkeypatch.delenv("COMPLIANCE_ADMIN_TENANT", raising=False)
+    monkeypatch.delenv("COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP", raising=False)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/auth/signup",
+            json={"email": "owner@company.com", "password": "Short123!", "role": "analyst"},
+        )
+
+    assert response.status_code == 422

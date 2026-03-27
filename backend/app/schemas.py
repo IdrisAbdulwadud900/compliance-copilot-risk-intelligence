@@ -299,7 +299,7 @@ class LoginResponse(BaseModel):
 
 class SignupEmailRequest(BaseModel):
     email: str = Field(min_length=5)
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=10)
     role: UserRole = "analyst"
 
 
@@ -586,12 +586,12 @@ class InvitePublicStatusResponse(BaseModel):
 
 class AcceptInviteRequest(BaseModel):
     token: str = Field(min_length=10)
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=10)
 
 
 class PasswordChangeRequest(BaseModel):
     current_password: str = Field(min_length=8)
-    new_password: str = Field(min_length=8)
+    new_password: str = Field(min_length=10)
 
 
 # ---------------------------------------------------------------------------
