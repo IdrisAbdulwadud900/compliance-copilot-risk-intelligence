@@ -4,7 +4,10 @@
 
 All protected endpoints require either:
 1. JWT token in `Authorization: Bearer <token>` header, or
-2. API key in `x-api-key: demo-key` header
+2. API key in `x-api-key: <configured-api-key>` header
+
+The old `demo-key` fallback is no longer used by default.
+For normal usage and pilot testing, prefer the email signup / login flow.
 
 ### Login (Public)
 
@@ -13,10 +16,12 @@ POST /auth/login
 Content-Type: application/json
 
 {
-  "email": "founder@demo.local",
-  "password": "ChangeMe123!"
+  "email": "analyst@company.com",
+  "password": "StrongPass123!"
 }
 ```
+
+If the workspace has no users yet, call `POST /auth/signup` first. The first email signup becomes the initial workspace admin.
 
 **Response:**
 ```json
@@ -24,7 +29,7 @@ Content-Type: application/json
   "access_token": "eyJ0eXAi...",
   "token_type": "bearer",
   "tenant_id": "tenant-a",
-  "email": "founder@demo.local",
+  "email": "analyst@company.com",
   "role": "admin"
 }
 ```
@@ -149,7 +154,7 @@ Authorization: Bearer <token>
       "address": "0xSUSPECT123",
       "label": "Known mixer operator",
       "created_at": "2026-03-21T10:00:00Z",
-      "created_by": "founder@demo.local",
+      "created_by": "analyst@company.com",
       "last_seen_at": "2026-03-21T22:15:00Z",
       "last_score": 78,
       "alert_on_activity": true

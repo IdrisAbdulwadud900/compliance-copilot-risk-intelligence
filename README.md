@@ -1,39 +1,117 @@
-# Crypto Compliance Copilot
+# Compliance Copilot
 
-A real-time wallet risk intelligence engine with behavior fingerprinting, narrative detection, watchlist management, alert events, webhook delivery, and wallet clustering. Built for compliance teams monitoring blockchain activity.
+Compliance Copilot is a prototype crypto compliance workspace for teams that need to investigate wallets, explain risk decisions, monitor watched addresses, and move suspicious activity into incidents and cases.
 
-## Features
+It is designed for:
+- exchanges and OTC desks
+- payment and treasury operations teams
+- compliance analysts and AML investigators
+- founder-led pilots where you want one place to score wallets, review clusters, and document decisions
 
-✅ Risk scoring (0–100) with multi-signal analysis
-✅ Behavior fingerprinting (10 patterns: sniper, wash-trader, bridge-hopper, insider, sanctions-linked, mixer-user, memecoin-cluster, etc.)
-✅ Wallet narrative generation with confidence + recommended action (block/flag/monitor/watch)
-✅ Wallet clustering with force-circle graph visualization
-✅ Watchlist + auto-alerts on activity
-✅ Alert acknowledgment + unread tracking
-✅ Webhook delivery with HMAC-SHA256 signing
-✅ Multi-chain support (Ethereum, Solana, Arbitrum, Base, BSC, Polygon)
-✅ Multi-tenant isolation + role-based access (admin/analyst/viewer)
-✅ JWT + API key auth
-✅ Invite workflow + email-less onboarding
-✅ Rate limiting + audit logging
-✅ Tag management + CSV export
-✅ Real-time severity pie chart + cluster visualization
+## What the product does
 
-## Quick Start
+Compliance Copilot combines wallet intelligence with analyst workflow:
+
+- wallet enrichment and scoring
+- behavior fingerprinting and narrative generation
+- wallet cluster visualization
+- watchlists and alerts
+- incidents and case management
+- team access, invites, audit logs, and exports
+
+## What is live today vs. prototype today
+
+### Strongest capability today
+- **Ethereum live enrichment and clustering**
+- end-to-end analyst workflow from wallet → alert → incident → case
+- multi-user auth, invite onboarding, audit trail, and admin controls
+
+### Prototype / partial capability today
+- **Base, Arbitrum, BSC, Polygon, and Solana** currently support analyst-driven/manual intelligence workflows better than fully live chain connectors
+- production backend is still using **ephemeral SQLite on Vercel** until `COMPLIANCE_DATABASE_URL` is set to managed Postgres
+
+That means the product is good for demos, pilots, and workflow validation right now, but not yet at full enterprise reliability.
+
+## Why someone would test it
+
+This repo is best tested by people who can answer questions like:
+- Would this save an analyst time during wallet review?
+- Is the narrative and recommended action credible enough to be useful?
+- Does the cluster view help explain risk faster than raw block explorer work?
+- Is the watchlist / alert / case workflow good enough for a real team?
+
+Good pilot testers include:
+- compliance or AML analysts at crypto companies
+- operations leads at OTC desks or exchanges
+- crypto risk consultants
+- founders and operators who manually review counterparties today
+
+## Core capabilities
+
+- risk scoring from 0–100
+- wallet narratives and behavior fingerprints
+- Ethereum live enrichment and cluster generation
+- multi-chain analyst workflow coverage
+- watchlist-triggered alerts
+- alert acknowledgement and resolution
+- incidents and cases
+- webhook delivery with HMAC signing
+- JWT auth, role-based access, invites, and audit logs
+- CSV export and tagging
+
+## Product status summary
+
+### Useful now for
+- demos
+- founder-led pilots
+- internal analyst workflow validation
+- showing a real crypto compliance operations desk experience
+
+### Not fully solved yet
+- durable production persistence until Postgres is configured
+- equal live-data depth across all supported chains
+- enterprise-grade reliability and SLA posture
+
+## Repository guide
+
+- [API.md](API.md) — endpoint reference
+- [ARCHITECTURE.md](ARCHITECTURE.md) — backend and frontend system design
+- [DEPLOY.md](DEPLOY.md) — local and production deployment guide
+
+## Quick start
+
+### Prerequisites
+- Python 3.9+
+- Node.js 18+
+- npm
 
 ### Backend
 
 ```bash
 cd backend
 cp .env.example .env
-python -m venv .venv  # if needed
+python -m venv ../.venv
 source ../.venv/bin/activate
 pip install -r requirements.txt
 PYTHONPATH=. python -m app.cli --env-file .env migrate
-PYTHONPATH=. python -m uvicorn app.main:app --reload --port 8000
+PYTHONPATH=. uvicorn app.main:app --reload --port 8000
 ```
 
-Local lifecycle scripts:
+### Frontend
+
+```bash
+cd app
+npm install
+npm run dev
+```
+
+Open:
+- frontend: `http://localhost:3000`
+- backend docs: `http://127.0.0.1:8000/docs`
+
+## Local helper scripts
+
+From the repo root:
 
 ```bash
 bash scripts/start_backend.sh
@@ -42,222 +120,183 @@ bash scripts/status_local.sh
 bash scripts/logs_local.sh backend
 bash scripts/deploy_local.sh
 bash scripts/stop_local.sh
-bash scripts/reset_local_workspace.sh --dry-run
 ```
 
-No login is seeded unless you explicitly set `COMPLIANCE_ADMIN_EMAIL`,
-`COMPLIANCE_ADMIN_PASSWORD`, and `COMPLIANCE_ADMIN_TENANT`.
+## Authentication and first-time setup
 
-If the database has no users yet, the first email signup automatically becomes
-the workspace admin. Later email signups keep their requested role.
+No default login is seeded unless you explicitly opt into preview bootstrap.
 
-To safely preview that first-run owner flow again on your local machine, run:
+### Normal local / pilot behavior
+- if the workspace has **no users**, the **first email signup becomes admin**
+- later signups keep their requested role
 
+### Optional preview-only bootstrap
+Only for demos, you can set:
+
+```env
+COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP=true
+COMPLIANCE_ADMIN_EMAIL=founder@demo.local
+COMPLIANCE_ADMIN_PASSWORD=ChangeMe123!
+COMPLIANCE_ADMIN_TENANT=demo-tenant
+```
+
+Do **not** use that flow for real deployments.
+
+### Preview auth methods
+OAuth/phone preview UI stays hidden unless you opt in with:
+
+```env
+COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=true
+NEXT_PUBLIC_ENABLE_PREVIEW_AUTH=true
+```
+
+## How to use the product
+
+### 1. Create or sign into a workspace
+- sign up with a work email if the workspace is empty
+- or sign in with existing operator credentials
+
+### 2. Investigate a wallet
+- paste a wallet address
+- choose the chain
+- enrich / analyze it
+- review score, fingerprints, narrative, and recommended action
+
+### 3. Review relationships
+- open the cluster graph
+- inspect linked wallets and relationship edges
+- use the narrative to summarize what the cluster implies
+
+### 4. Escalate if needed
+- add the wallet to a watchlist
+- create or resolve alerts
+- open an incident
+- create a case and attach notes, entities, and evidence links
+
+## Real-wallet testing
+
+Two QA scripts are included:
+
+### Live Ethereum workflow QA
 ```bash
-bash scripts/reset_local_workspace.sh --yes
+source .venv/bin/activate
+python scripts/real_wallet_qa.py
 ```
 
-That command backs up the current SQLite database under `backend/data/backups/`,
-clears the active local DB, and restarts the stack so the next email signup
-becomes the workspace owner/admin.
+This validates:
+- live enrichment
+- intelligence scoring
+- cluster generation
+- watchlist / alert / incident / case flow
 
-To restore the most recent saved local dataset afterward, run:
-
+### Cross-chain QA
 ```bash
-bash scripts/restore_local_workspace.sh --yes
+source .venv/bin/activate
+python scripts/cross_chain_wallet_qa_tmp.py
 ```
 
-You can also restore a specific backup file with `--backup path/to/file.db`.
-The restore command backs up the current active DB first, then replaces it with
-the chosen snapshot and restarts the stack.
+This validates supported-chain workflow behavior across:
+- Ethereum
+- Base
+- Arbitrum
+- BSC
+- Polygon
+- Solana
 
-For local preview only, you can opt into the seeded preview admin by also setting
-`COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP=true`. The insecure preview password
-`ChangeMe123!` is ignored unless that flag is enabled.
+Both scripts now auto-bootstrap a QA user if the local workspace is empty, or they can use:
 
-Preview OAuth and phone signup methods are also opt-in. Set
-`COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=true` on the backend and
-`NEXT_PUBLIC_ENABLE_PREVIEW_AUTH=true` on the frontend only when you explicitly
-want those non-production preview flows visible for demos.
-
-### Frontend
-
-```bash
-cd app
-npm install
-npm run dev
-# Visit http://localhost:3000
+```env
+COMPLIANCE_QA_EMAIL=qa.operator@demo.local
+COMPLIANCE_QA_PASSWORD=StrongPass123!
 ```
 
-## Architecture
+## Current real-wallet evidence
 
-### Backend (FastAPI + modular routers)
-
-**Core Modules:**
-- `app/risk_engine.py` — Wallet risk scoring (0–100) with chain multipliers
-- `app/intelligence.py` — Behavior fingerprinting + narrative generation + confidence capping
-- `app/cluster.py` — Deterministic related-wallet graph (up to 8 nodes)
-- `app/webhooks.py` — Fire-and-forget HMAC-SHA256 webhook delivery
-- `app/db.py` — Multi-tenant SQLite persistence layer with production guardrails and future DB portability hooks
-- `app/migrations.py` — Versioned SQLite schema migrations applied automatically at startup
-- `app/auth.py` — JWT + API key authentication
-- `app/routers/` — domain routers for auth, intelligence, alerts, incidents, cases, watchlist, team, and webhooks
-- `app/main.py` — app assembly, health/readiness, analytics, and cluster endpoint
-
-### Frontend (Next.js 16 + React 19)
-
-**Pages:**
-- `/` — Main dashboard (intelligence, watchlist, alerts, webhooks, team)
-- `/invite?token=...` — Invite acceptance
-
----
-
-## API Endpoints
-
-### Public
-
-```bash
-GET /health
-GET /ready
-```
-
-### Protected (JWT or API Key)
-
-**Intelligence:**
-- `POST /wallets/intelligence` → fingerprints + narrative + recommended action
-- `GET /wallets/{address}/cluster?chain=ethereum` → graph nodes + edges
-
-**Watchlist:**
-- `GET /watchlist`, `POST /watchlist`, `DELETE /watchlist/{id}`
-
-**Alerts:**
-- `GET /alert-events?limit=50&unacked_only=false`, `POST /alert-events/{id}/ack`
-
-**Webhooks (Admin):**
-- `GET /webhooks`, `POST /webhooks`, `DELETE /webhooks/{id}`
-
-**Auth:**
-- `POST /auth/login`, `POST /auth/accept-invite`, `POST /auth/change-password`
-
-**Team (Admin):**
-- `POST /users`, `GET /users`, `POST /users/invite`, `GET /users/invites`, `DELETE /users/invites/{token}`
-
-**Other:**
-- `GET /dashboard`, `GET /audit-logs`
-
----
-
-## Risk Scoring
-
-**Score Factors:**
-- Sanctions exposure (0–40)
-- Mixer usage (0–30)
-- Bridge hops (0–20)
-- Chain multiplier (±10, BSC/Polygon higher)
-- Behavioral patterns (±10)
-
-**Actions:**
-| Score | Action  |
-|-------|---------|
-| ≥85   | Block   |
-| ≥65   | Flag    |
-| ≥40   | Monitor |
-| <40   | Watch   |
-
----
+Recent QA runs showed:
+- Vitalik wallet: low-signal / low-risk / root-only cluster behavior
+- Binance hot wallet: strong live activity, large 24h volume, and meaningful cluster output
+- USDC contract: graceful low-signal handling for a busy contract address
+- watchlist → alert → incident → case workflow works end to end locally
 
 ## Testing
 
+### Backend tests
 ```bash
 cd backend
-python -m pytest tests/ -v
+PYTHONPATH=. pytest tests/ -v
 ```
 
-`138` backend tests passing covering auth, multi-tenancy, intelligence routes, RBAC, watchlist, alerts, incidents, cases, webhooks, and cluster flows.
-
-## Database Migrations
-
-- Backend startup now runs internal versioned migrations before seeding any bootstrap admin.
-- Migration state is tracked in the `schema_migrations` table.
-- Existing SQLite databases are upgraded in place; fresh databases receive the full schema automatically.
-- Current production posture is still SQLite-first, but schema changes are now tracked explicitly instead of living only in `init_db`.
-- `/health` and `/ready` now expose migration state so deploy checks can detect schema drift.
-
-Manual commands:
-
+### Frontend build validation
 ```bash
-cd backend
-PYTHONPATH=. python -m app.cli --env-file .env status
-PYTHONPATH=. python -m app.cli --env-file .env migrate
-PYTHONPATH=. python -m app.cli --env-file .env health --url http://127.0.0.1:8000/health
-PYTHONPATH=. python -m app.cli --env-file .env preflight --url http://127.0.0.1:8000/health
+cd app
+npm run build
 ```
 
----
+## Deployment summary
 
-## Tech Stack
+### Frontend
+- deployed on Vercel
 
-- **Backend:** Python 3.9.6, FastAPI 0.104, SQLite (current), Pydantic v2, python-jose
-- **Frontend:** Next.js 16.2.0, React 19, TypeScript 5, Tailwind CSS 4, Recharts
-- **Testing:** pytest + FastAPI TestClient
+### Backend
+- deployed on Vercel
+- current live health/readiness explicitly report persistence state
 
----
+### Important production note
+If `/ready` returns:
+- `status: degraded`
+- `database.persistence: ephemeral`
+- `recommended_action` asking for `COMPLIANCE_DATABASE_URL`
 
-## Deployment Notes
+then production is **not yet durable** and user/account data may be lost across deploys.
 
-Use environment variables for secrets:
-- `COMPLIANCE_DB_PATH` → active SQLite file path
-- `COMPLIANCE_DATABASE_URL` → optional `sqlite:///...` or `postgresql://...` runtime target
-- `COMPLIANCE_JWT_SECRET` → JWT signing key
-- `COMPLIANCE_WEBHOOK_SECRET` → Webhook HMAC secret
-- `COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP` → enable preview/demo bootstrap only for local testing
-- `COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS` → enable preview OAuth/phone signup endpoints only for demos
-- `COMPLIANCE_ADMIN_EMAIL`, `COMPLIANCE_ADMIN_PASSWORD`, `COMPLIANCE_ADMIN_TENANT`, `COMPLIANCE_ADMIN_ROLE`
+## Environment variables that matter most
 
-For production:
-- PostgreSQL runtime foundations are now present, but should still be validated in your target environment before cutover
-- Enable HTTPS + CORS restrictions
-- Store secrets in Vault/AWS Secrets Manager
-- Keep `COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP=false`
-- Keep `COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=false`
-- Do not use the preview password `ChangeMe123!`
-- Monitor webhook delivery logs
-- Run in CI/CD pipeline
-- `GET /users/invites` (admin)
-- `DELETE /users/invites/{token}` (admin)
-- `GET /audit-logs` (admin)
+### Backend
+- `COMPLIANCE_JWT_SECRET`
+- `COMPLIANCE_WEBHOOK_SECRET`
+- `COMPLIANCE_ALLOWED_ORIGINS`
+- `COMPLIANCE_DATABASE_URL`
+- `COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP`
+- `COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS`
 
-All endpoints except `GET /health` and `GET /ready` require authentication:
-- `Authorization: Bearer <token>` from `/auth/login`, or
-- `x-api-key` header as fallback.
+### Frontend
+- `NEXT_PUBLIC_API_BASE`
+- `NEXT_PUBLIC_ENABLE_PREVIEW_AUTH`
+- `NEXT_PUBLIC_API_KEY`
 
-## Login (JWT)
+## Honest limitations
 
-Create an admin user by setting bootstrap env vars before first startup, then
-login from the dashboard UI header.
+- production persistence still needs Postgres
+- non-Ethereum chains are not yet equally live/data-rich
+- pricing above small-pilot level is hard to justify until persistence and broader chain depth are improved
 
-Preview OAuth/phone signup buttons stay hidden unless `NEXT_PUBLIC_ENABLE_PREVIEW_AUTH=true` is set in the frontend environment.
+## If you want outside testers
 
-## Invite onboarding
+The fastest path is to recruit **5–10 pilot users** who match your ideal buyer:
+- 2 compliance analysts
+- 2 exchange / OTC ops people
+- 1–2 crypto risk consultants
+- 1 founder or head of compliance at a small crypto firm
 
-Admins can issue invites from the team panel or via `POST /users/invite`.
-Invited users complete onboarding with `POST /auth/accept-invite` using invite token and password.
+Ask them to do 3 tasks:
+- assess one known low-risk wallet
+- assess one high-activity / exchange wallet
+- escalate one wallet through watchlist, alert, incident, and case flow
 
-## Tenant auth config
+Then ask:
+- what did you trust?
+- what felt fake?
+- what saved time?
+- what was missing before this could become a paid tool?
 
-Set backend `COMPLIANCE_API_KEYS` as comma-separated `api_key:tenant_id:role` pairs.
+## Prototype pricing reality
 
-Example:
+Right now this repo is strongest as:
+- an internal tool
+- a pilot
+- a premium prototype
 
-```env
-COMPLIANCE_API_KEYS="acme-analyst-key:acme-finance:analyst"
-```
-
-Set frontend key in `.env.local`:
-
-```env
-NEXT_PUBLIC_API_KEY=
-```
+It is **not yet a strong self-serve $1k/month SaaS** until durable storage and broader live chain coverage are finished.
 
 ## Rate limiting (auth hardening)
 
