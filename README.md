@@ -232,6 +232,21 @@ cd app
 npm run build
 ```
 
+### Automated blunt audit
+```bash
+source .venv/bin/activate
+python scripts/product_audit_agent.py
+```
+
+Use strict CI-style exit behavior if you want the command to fail on weak readiness:
+
+```bash
+source .venv/bin/activate
+python scripts/product_audit_agent.py --strict-exit --json
+```
+
+This audit checks docs, local stack health, backend tests, frontend build, wallet QA, cross-chain QA, and live production readiness, then prints a blunt score, blockers, and a yes/no answer on whether the product looks ready to charge premium pricing.
+
 ## Deployment summary
 
 ### Frontend
