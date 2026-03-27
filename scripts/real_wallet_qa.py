@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
@@ -10,8 +11,8 @@ from typing import Any, Dict, List, Optional
 
 
 BASE_URL = "http://127.0.0.1:8000"
-LOGIN_EMAIL = "founder@demo.local"
-LOGIN_PASSWORD = "ChangeMe123!"
+LOGIN_EMAIL = os.getenv("COMPLIANCE_QA_EMAIL", "qa.operator@demo.local")
+LOGIN_PASSWORD = os.getenv("COMPLIANCE_QA_PASSWORD", "StrongPass123!")
 
 
 @dataclass
@@ -73,6 +74,27 @@ class ApiClient:
             {"email": LOGIN_EMAIL, "password": LOGIN_PASSWORD},
         )
         self.token = payload["access_token"]
+
+    def ensure_login(self) -> None:
+        try:
+            self.login()
+            return
+        except RuntimeError as exc:
+            if "401" not in str(exc):
+                raise
+
+        setup = self.get("/auth/setup-status")
+        if not setup.get("workspace_ready", False):
+            payload = self.post(
+                "/auth/signup",
+                {"email": LOGIN_EMAIL, "password": LOGIN_PASSWORD, "role": "analyst"},
+            )
+            self.token = payload["access_token"]
+            return
+
+        raise RuntimeError(
+            "login failed for wallet QA user; set COMPLIANCE_QA_EMAIL and COMPLIANCE_QA_PASSWORD to a valid workspace account"
+        )
 
     def get(self, path: str) -> Any:
         return self._request("GET", path)
@@ -285,7 +307,7 @@ def main() -> int:
 
     try:
         log("[auth] login")
-        client.login()
+        client.ensure_login()
         results.append(CheckResult("login", True, LOGIN_EMAIL))
     except Exception as exc:
         print(json.dumps({"results": [], "failures": [f"login failed: {exc}"]}, indent=2))

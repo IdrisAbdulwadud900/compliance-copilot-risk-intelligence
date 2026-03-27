@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.parse
 import urllib.request
 from urllib.error import HTTPError
 
 BASE = "http://127.0.0.1:8000"
-LOGIN = {"email": "founder@demo.local", "password": "ChangeMe123!"}
+LOGIN = {
+    "email": os.getenv("COMPLIANCE_QA_EMAIL", "qa.operator@demo.local"),
+    "password": os.getenv("COMPLIANCE_QA_PASSWORD", "StrongPass123!"),
+}
 
 WALLETS = [
     {
@@ -71,8 +75,29 @@ def req(method: str, path: str, payload: dict | None = None, token: str | None =
         raise RuntimeError(f"{method} {path} -> {exc.code}: {raw}") from exc
 
 
+def ensure_token() -> str:
+    try:
+        return req("POST", "/auth/login", LOGIN)["access_token"]
+    except RuntimeError as exc:
+        if "401" not in str(exc):
+            raise
+
+    setup = req("GET", "/auth/setup-status")
+    if not setup.get("workspace_ready", False):
+        payload = req(
+            "POST",
+            "/auth/signup",
+            {"email": LOGIN["email"], "password": LOGIN["password"], "role": "analyst"},
+        )
+        return payload["access_token"]
+
+    raise RuntimeError(
+        "login failed for wallet QA user; set COMPLIANCE_QA_EMAIL and COMPLIANCE_QA_PASSWORD to a valid workspace account"
+    )
+
+
 def main() -> None:
-    token = req("POST", "/auth/login", LOGIN)["access_token"]
+    token = ensure_token()
     results = []
 
     for wallet in WALLETS:
