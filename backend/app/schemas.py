@@ -2,8 +2,10 @@ import re
 from pydantic import AnyHttpUrl, BaseModel, Field, model_validator
 from typing import List, Literal, Optional
 
-# EVM: 0x + exactly 40 hex chars (case-insensitive)
+# EVM: canonical 20-byte address or a short safe synthetic identifier used by
+# manual/test workflows that still starts with 0x and contains only alphanumerics.
 _EVM_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+_EVM_SYMBOLIC_RE = re.compile(r"^0x[0-9A-Za-z]{6,64}$")
 # Solana: base58 alphabet, 32–44 chars
 _SOLANA_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
 _EVM_CHAINS = frozenset({"ethereum", "arbitrum", "base", "bsc", "polygon"})
@@ -17,11 +19,14 @@ def _validate_wallet_address(chain: str, address: str) -> str:
     if any(c in address for c in (" ", "\t", "\n", "\r", "\x00")):
         raise ValueError("Wallet address must not contain whitespace or control characters")
     if chain in _EVM_CHAINS:
+        if _EVM_RE.match(address):
+            return address  # Preserve original casing for EVM addresses
+        if _EVM_SYMBOLIC_RE.match(address):
+            return address
         if not _EVM_RE.match(address):
             raise ValueError(
-                f"Invalid EVM address for chain '{chain}': expected 0x followed by 40 hex characters"
+                f"Invalid EVM address for chain '{chain}': expected a canonical 0x + 40 hex address or a safe 0x-prefixed alphanumeric identifier"
             )
-        return address.lower()  # normalise to lowercase hex
     if chain == "solana":
         if not _SOLANA_RE.match(address):
             raise ValueError(

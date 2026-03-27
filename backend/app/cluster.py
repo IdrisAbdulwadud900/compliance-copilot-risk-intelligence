@@ -40,11 +40,26 @@ from app.schemas import (
 # so the same input always produces the same cluster.
 # ---------------------------------------------------------------------------
 
+_BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+
+def _base58ish(seed: str, length: int) -> str:
+    value = int.from_bytes(hashlib.sha256(seed.encode()).digest(), "big")
+    chars: List[str] = []
+    while len(chars) < length:
+        value, index = divmod(value, len(_BASE58_ALPHABET))
+        chars.append(_BASE58_ALPHABET[index])
+        if value == 0 and len(chars) < length:
+            value = int.from_bytes(
+                hashlib.sha256(f"{seed}:{len(chars)}".encode()).digest(),
+                "big",
+            )
+    return "".join(chars)[:length]
+
 def _derive_address(seed: str, index: int, chain: Blockchain) -> str:
     digest = hashlib.sha256(f"{seed}:{index}:{chain}".encode()).hexdigest()
     if chain == "solana":
-        # Solana base58 style (44 chars)
-        return digest[:44]
+        return _base58ish(f"{seed}:{index}:{chain}", 44)
     # EVM style
     return "0x" + digest[:40]
 
@@ -112,9 +127,9 @@ def build_cluster(
     relations = _relation_pool(root_wallet)
 
     for i in range(n_related):
-        addr = _derive_address(seed, i, chain)
-        node_score = _perturb_score(root_score_int, seed, i)
         node_chain = _vary_chain(chain, seed, i)
+        addr = _derive_address(seed, i, node_chain)
+        node_score = _perturb_score(root_score_int, seed, i)
         node_wallet = _make_related_wallet(root_wallet, addr, node_chain, i)
         node_fps = fingerprint_wallet(node_wallet, score_wallet(node_wallet))
         relation: ClusterRelationType = relations[i % len(relations)]
@@ -149,7 +164,8 @@ def build_cluster(
         ))
 
         if i > 0 and i % 3 == 0:
-            prev_addr = _derive_address(seed, i - 1, chain)
+            prev_chain = _vary_chain(chain, seed, i - 1)
+            prev_addr = _derive_address(seed, i - 1, prev_chain)
             edges.append(ClusterEdge(
                 source=prev_addr,
                 target=addr,
