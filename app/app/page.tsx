@@ -246,6 +246,58 @@ const COVERAGE_NOTES = [
   },
 ];
 
+const TRUST_SIGNAL_STRIP = [
+  {
+    metric: "One workspace",
+    label: "Intelligence, watchlists, incidents, and cases stay in one operating surface.",
+  },
+  {
+    metric: "Explainable output",
+    label: "Scores, fingerprints, narratives, and recommended actions remain analyst-readable.",
+  },
+  {
+    metric: "Live where strongest",
+    label: "Ethereum enrichment and clustering work live while other chains remain clearly marked as analyst-driven.",
+  },
+  {
+    metric: "Audit-friendly",
+    label: "Every escalation path is designed to leave a reviewable trail, not just a dashboard screenshot.",
+  },
+];
+
+const MISSION_CONTROL_LANES = [
+  {
+    kicker: "Investigate",
+    title: "Trace wallet behavior with context, not guesswork.",
+    detail: "Move from enrichment to narrative, fingerprints, and live relationship graphs without switching tools.",
+  },
+  {
+    kicker: "Monitor",
+    title: "Turn high-risk wallets into an active queue.",
+    detail: "Promote a wallet into watchlist coverage, trigger alerts, and keep analysts focused on the next real signal.",
+  },
+  {
+    kicker: "Respond",
+    title: "Document decisions fast enough for operations.",
+    detail: "Escalate into incidents and cases with enough structure to explain the decision later to compliance or leadership.",
+  },
+];
+
+const TRUST_ARCHITECTURE = [
+  {
+    title: "Decision-ready hierarchy",
+    detail: "The desk leads with risk, next action, and workflow state so operators know what to do next, not just what happened.",
+  },
+  {
+    title: "Chain coverage honesty",
+    detail: "The UI makes the strongest live paths obvious and labels analyst-driven chains clearly, which helps preserve trust during pilots.",
+  },
+  {
+    title: "Operational trust cues",
+    detail: "Secure workspace state, audit logs, invite controls, and response flows reinforce that this is an operations tool, not a toy demo.",
+  },
+];
+
 export default function Home() {
   // Core state
   const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
@@ -1933,6 +1985,122 @@ export default function Home() {
                   </div>
                 </article>
               </div>
+
+              <section className="glass rounded-3xl p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Mission control</p>
+                    <h3 className="mt-2 text-xl font-semibold text-white">Structured like an analyst system, not a generic crypto app.</h3>
+                  </div>
+                  <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-cyan-200">Original UX uplift</span>
+                </div>
+
+                <div className="proof-strip mt-5 grid gap-3 xl:grid-cols-4">
+                  {TRUST_SIGNAL_STRIP.map((item) => (
+                    <article key={item.metric} className="proof-card rounded-2xl p-4">
+                      <p className="text-sm font-semibold text-white">{item.metric}</p>
+                      <p className="mt-2 text-xs leading-relaxed text-slate-400">{item.label}</p>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="mt-5 grid gap-4 xl:grid-cols-[1.25fr_.75fr]">
+                  <div className="rounded-3xl border border-slate-800/80 bg-slate-950/45 p-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-indigo-200">Analyst command surface</span>
+                      <span className="rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300">Investigate → monitor → respond</span>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                      {MISSION_CONTROL_LANES.map((lane, index) => (
+                        <article key={lane.kicker} className="mission-lane-card rounded-2xl p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="mission-lane-kicker">{lane.kicker}</span>
+                            <span className="workflow-card-index workflow-card-index-done">0{index + 1}</span>
+                          </div>
+                          <p className="mt-3 text-sm font-semibold text-white">{lane.title}</p>
+                          <p className="mt-2 text-xs leading-relaxed text-slate-400">{lane.detail}</p>
+                        </article>
+                      ))}
+                    </div>
+
+                    <div className="analyst-preview-grid mt-4 grid gap-3 lg:grid-cols-[.9fr_1.1fr]">
+                      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Desk priorities</p>
+                        <div className="mt-3 space-y-2.5 text-xs">
+                          <div className="feed-row">
+                            <ShieldCheck className="h-3.5 w-3.5 text-indigo-300" />
+                            <div>
+                              <p className="font-medium text-white">Explainable decision core</p>
+                              <p className="text-slate-500">Lead with narrative + score + recommended action.</p>
+                            </div>
+                          </div>
+                          <div className="feed-row">
+                            <Bell className="h-3.5 w-3.5 text-amber-300" />
+                            <div>
+                              <p className="font-medium text-white">Queue-driven monitoring</p>
+                              <p className="text-slate-500">Operators should see the next risky wallet immediately.</p>
+                            </div>
+                          </div>
+                          <div className="feed-row">
+                            <BookmarkPlus className="h-3.5 w-3.5 text-cyan-300" />
+                            <div>
+                              <p className="font-medium text-white">Case-ready handoff</p>
+                              <p className="text-slate-500">Escalation should feel native, not bolted on.</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Workflow preview</p>
+                            <p className="mt-1 text-sm font-semibold text-white">What a stronger enterprise entry point should communicate</p>
+                          </div>
+                          <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-300">Analyst-first</span>
+                        </div>
+
+                        <div className="mt-4 grid gap-2.5">
+                          <div className="workflow-signal-card">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs font-semibold text-white">Wallet intake</span>
+                              <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[9px] uppercase text-slate-300">screen</span>
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-400">Accept a wallet, show chain context, and keep the strongest next action obvious.</p>
+                          </div>
+                          <div className="workflow-signal-card">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs font-semibold text-white">Relationship review</span>
+                              <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2 py-0.5 text-[9px] uppercase text-cyan-300">trace</span>
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-400">Show counterparties, confidence, and cross-chain hints without overwhelming the operator.</p>
+                          </div>
+                          <div className="workflow-signal-card">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs font-semibold text-white">Escalation path</span>
+                              <span className="rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-0.5 text-[9px] uppercase text-violet-300">respond</span>
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-400">Convert the finding into watchlist, alert, incident, or case without losing context.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-slate-800/80 bg-slate-950/45 p-5">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Why this UX direction works</p>
+                    <div className="mt-4 space-y-3">
+                      {TRUST_ARCHITECTURE.map((item) => (
+                        <article key={item.title} className="trust-note-card rounded-2xl p-4">
+                          <p className="text-sm font-semibold text-white">{item.title}</p>
+                          <p className="mt-2 text-xs leading-relaxed text-slate-400">{item.detail}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
             </div>
           )}
 
