@@ -145,6 +145,20 @@ def fingerprint_wallet(wallet: WalletInput, score: WalletScore) -> List[Behavior
             confidence=_clamp(68 + int(wallet.volume_24h_usd / 1_000_000) * 5),
         ))
 
+    if not fingerprints and (wallet.txn_24h > 0 or wallet.volume_24h_usd > 0):
+        activity_confidence = 45
+        if wallet.txn_24h > 150 or wallet.volume_24h_usd > 250_000:
+            activity_confidence = 58
+        elif wallet.txn_24h > 25 or wallet.volume_24h_usd > 25_000:
+            activity_confidence = 52
+
+        fingerprints.append(BehaviorFingerprint(
+            label="active_wallet",
+            display="🧭 Active Wallet",
+            description="Recent on-chain activity is present, but current heuristics do not indicate a stronger elevated-risk behavioral signature.",
+            confidence=activity_confidence,
+        ))
+
     return fingerprints
 
 
@@ -198,9 +212,9 @@ def detect_narrative(
 def _recommended_action(score: int, labels: set) -> Tuple[str, str]:
     if score >= 85 or "sanctions_linked" in labels:
         return "block", "🚫 Block / Freeze"
-    if score >= 65 or "mixer_user" in labels or "bridge_hopper" in labels:
+    if score >= 65 or "mixer_user" in labels or ("bridge_hopper" in labels and score >= 40):
         return "flag", "🚨 Flag & Escalate"
-    if score >= 40 or labels & {"wash_trader", "insider", "sanctions_adjacent"}:
+    if score >= 40 or labels & {"wash_trader", "insider", "sanctions_adjacent", "bridge_hopper"}:
         return "monitor", "👁 Enhanced Monitoring"
     return "watch", "📋 Add to Watchlist"
 

@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
-from app.schemas import Alert
+from app.schemas import DashboardAlert
 
 
-def demo_alerts() -> list[Alert]:
+def demo_alerts() -> list[DashboardAlert]:
     now = datetime.now(timezone.utc)
     rows = [
         (
@@ -47,7 +47,7 @@ def demo_alerts() -> list[Alert]:
     for i, row in enumerate(rows, start=1):
         title, severity, chain, score, wallet, amount, summary = row
         alerts.append(
-            Alert(
+            DashboardAlert(
                 id=f"alrt_{i}",
                 timestamp=(now - timedelta(minutes=i * 17)).isoformat(),
             chain=chain,  # type: ignore[arg-type]

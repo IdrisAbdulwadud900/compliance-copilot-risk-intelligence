@@ -33,9 +33,51 @@ This document provides instructions for deploying the Compliance Copilot system 
    - Backend API: http://localhost:8000
    - API Docs: http://localhost:8000/docs
 
-5. **Default credentials**
-   - Email: `founder@demo.local`
-   - Password: `ChangeMe123!`
+5. **Create your first admin explicitly**
+   - Set `COMPLIANCE_ADMIN_EMAIL`, `COMPLIANCE_ADMIN_PASSWORD`, `COMPLIANCE_ADMIN_TENANT`, and `COMPLIANCE_ADMIN_ROLE=admin`
+   - Keep `COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP=false` for real deployments
+   - Keep `COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=false` for real deployments
+   - The app no longer relies on insecure default bootstrap credentials
+   - If you leave bootstrap vars empty, the first email signup becomes the initial workspace admin
+
+### Quick Start (Local Production Processes)
+
+Use the helper script to launch the hardened backend and frontend without Docker:
+
+```bash
+chmod +x scripts/deploy_local.sh
+./scripts/deploy_local.sh
+```
+
+Component-level helpers are also available:
+
+```bash
+bash scripts/start_backend.sh
+bash scripts/start_frontend.sh
+bash scripts/status_local.sh
+bash scripts/logs_local.sh all
+bash scripts/stop_local.sh
+```
+
+The script:
+- runs explicit backend migrations first
+- builds the frontend if needed
+- starts the backend with `uvicorn --env-file`
+- verifies `GET /health` before continuing
+- starts the frontend with `next start`
+- writes PID files to `.run/` and logs to `logs/`
+
+`/health` and `/ready` now include migration metadata so automated checks can verify both service availability and schema state.
+
+You can also run migrations manually before boot:
+
+```bash
+cd backend
+PYTHONPATH=. python -m app.cli --env-file .env status
+PYTHONPATH=. python -m app.cli --env-file .env migrate
+PYTHONPATH=. python -m app.cli --env-file .env health --url http://127.0.0.1:8000/health
+PYTHONPATH=. python -m app.cli --env-file .env preflight --url http://127.0.0.1:8000/health
+```
 
 ---
 
@@ -83,8 +125,11 @@ This document provides instructions for deploying the Compliance Copilot system 
    - Set Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
    - Add Environment Variables:
      ```
-     COMPLIANCE_JWT_SECRET=your-secret-key
-     COMPLIANCE_DB_PATH=/tmp/compliance.db
+   COMPLIANCE_JWT_SECRET=your-secret-key
+    COMPLIANCE_WEBHOOK_SECRET=your-webhook-secret
+    COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP=false
+    COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=false
+   COMPLIANCE_DB_PATH=/tmp/compliance.db
      ```
 
 3. **Deploy**
@@ -107,7 +152,8 @@ This document provides instructions for deploying the Compliance Copilot system 
    - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 
 2. **Configure Environment**
-   - Add `COMPLIANCE_JWT_SECRET` and `COMPLIANCE_DB_PATH`
+   - Add `COMPLIANCE_JWT_SECRET`, `COMPLIANCE_WEBHOOK_SECRET`, `COMPLIANCE_DB_PATH`
+   - Keep `COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP=false` and `COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=false`
    - Deploy
 
 ---
@@ -206,15 +252,30 @@ This document provides instructions for deploying the Compliance Copilot system 
 ### Backend (.env or docker-compose.yml)
 ```
 COMPLIANCE_JWT_SECRET=your-super-secret-key
+COMPLIANCE_WEBHOOK_SECRET=your-strong-webhook-secret
+COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP=false
+COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=false
 COMPLIANCE_DB_PATH=/data/compliance.db
-COMPLIANCE_DB_TYPE=sqlite  # or postgres
+COMPLIANCE_DATABASE_URL=sqlite:////data/compliance.db
 COMPLIANCE_PORT=8000
 COMPLIANCE_CORS_ORIGINS=http://localhost:3000,https://your-domain.com
 ```
 
+Local preview note:
+- Set `COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP=true` only when you intentionally want the preview workspace admin seeded for demos.
+- Set `COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=true` only when you intentionally want preview OAuth or phone signup flows available.
+- If preview bootstrap is off, no preview admin is created and the historical preview password is ignored.
+- Keep `NEXT_PUBLIC_ENABLE_PREVIEW_AUTH=false` in launch environments so the signed-out UI shows only the real email/password path.
+
+Current storage note:
+- The runtime is still backed by the SQLite implementation in [backend/app/db.py](backend/app/db.py)
+- `COMPLIANCE_DATABASE_URL` currently supports `sqlite:///...` URLs only
+- Postgres is the next migration target, but is not active in the current persistence layer yet
+
 ### Frontend (.env.local or Vercel settings)
 ```
 NEXT_PUBLIC_API_BASE=http://localhost:8000  # or your deployed backend URL
+NEXT_PUBLIC_API_KEY=                      # optional; set only if you intentionally use API-key auth from the frontend
 ```
 
 ---
@@ -319,8 +380,11 @@ journalctl -u docker -f
 
 ## Security Checklist
 
-- [ ] Change default `ChangeMe123!` password
+- [ ] Leave `COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP=false`
+- [ ] Leave `COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=false`
+- [ ] Leave `NEXT_PUBLIC_ENABLE_PREVIEW_AUTH=false`
 - [ ] Set strong `COMPLIANCE_JWT_SECRET`
+- [ ] Set strong `COMPLIANCE_WEBHOOK_SECRET`
 - [ ] Enable HTTPS/TLS (Let's Encrypt)
 - [ ] Rotate JWT secret monthly
 - [ ] Enable audit logging
@@ -329,6 +393,7 @@ journalctl -u docker -f
 - [ ] Monitor for suspicious activity
 - [ ] Keep dependencies updated
 - [ ] Restrict database access
+- [ ] Do not set `NEXT_PUBLIC_API_KEY` unless browser API-key auth is intentionally required
 
 ---
 

@@ -5,6 +5,21 @@ export type Blockchain = "ethereum" | "solana" | "arbitrum" | "base" | "bsc" | "
 export type RecommendedAction = "block" | "flag" | "monitor" | "watch";
 export type AlertTrigger = "score_threshold" | "watchlist_activity" | "new_cluster_link" | "manual";
 export type WebhookEvent = "alert.fired" | "wallet.flagged" | "watchlist.hit";
+export type AlertSeverity = "info" | "warning" | "high" | "critical";
+export type AlertType = "score_threshold" | "watchlist_hit" | "volume_spike" | "risk_change" | "new_cluster_link" | "manual";
+export type IncidentStatus = "open" | "investigating" | "resolved" | "closed";
+export type CaseStatus = "open" | "in_review" | "escalated" | "closed";
+export type CasePriority = "low" | "medium" | "high" | "critical";
+export type CaseEventType =
+  | "case_created"
+  | "alert_linked"
+  | "analysis_linked"
+  | "note_added"
+  | "wallet_linked"
+  | "cluster_linked"
+  | "attachment_added"
+  | "status_changed";
+export type CaseEntityType = "wallet" | "cluster" | "alert" | "analysis" | "transaction";
 
 // Intelligence layer
 export interface BehaviorFingerprint {
@@ -59,7 +74,7 @@ export interface WatchlistPayload {
   items: WatchlistEntry[];
 }
 
-// Alert Events
+// Alert Events (v2 — includes all backend Alert model fields)
 export interface AlertEvent {
   id: number;
   tenant_id: string;
@@ -72,11 +87,85 @@ export interface AlertEvent {
   title: string;
   body: string;
   acknowledged: boolean;
+  acknowledged_at: string | null;
+  resolved_at: string | null;
+  alert_type: AlertType;
+  severity: AlertSeverity;
+  prev_score: number | null;
+  incident_id: number | null;
 }
 
+/** Full Alert model — same shape as AlertEvent, exported as a clean alias. */
+export type Alert = AlertEvent;
+
 export interface AlertEventPayload {
-  items: AlertEvent[];
+  items: Alert[];
   unread_count: number;
+}
+
+export interface AlertFeedPayload {
+  items: Alert[];
+  unread_count: number;
+  last_id: number;
+}
+
+export interface CreateAlertRequest {
+  alert_type: AlertType;
+  severity: AlertSeverity;
+  chain: Blockchain;
+  address: string;
+  score: number;
+  risk_level: RiskLevel;
+  title: string;
+  body: string;
+  prev_score?: number;
+}
+
+export interface UpdateAlertRequest {
+  resolved?: boolean;
+  incident_id?: number | null;
+}
+
+export interface IncidentSummary {
+  id: number;
+  tenant_id: string;
+  title: string;
+  description: string;
+  status: IncidentStatus;
+  severity: AlertSeverity;
+  alert_count: number;
+  created_at: string;
+  updated_at: string;
+  opened_by: string;
+  assigned_to: string | null;
+  resolved_at: string | null;
+}
+
+export interface IncidentDetail extends IncidentSummary {
+  alerts: Alert[];
+}
+
+export interface IncidentListPayload {
+  items: IncidentSummary[];
+}
+
+export interface CreateIncidentRequest {
+  title: string;
+  description: string;
+  severity: AlertSeverity;
+  alert_ids?: number[];
+  assigned_to?: string;
+}
+
+export interface UpdateIncidentRequest {
+  status?: IncidentStatus;
+  severity?: AlertSeverity;
+  description?: string;
+  assigned_to?: string | null;
+}
+
+export interface LinkAlertToIncidentRequest {
+  alert_ids: number[];
 }
 
 // Webhooks
@@ -105,22 +194,173 @@ export interface ClusterNode {
   score: number;
   risk_level: RiskLevel;
   fingerprints: string[];
+  confidence: number;
+  entity_likelihood: number;
+  last_active_at: string | null;
+  activity_band: "low" | "moderate" | "high";
   is_root: boolean;
+}
+
+export interface ClusterHeuristicEvidence {
+  heuristic:
+    | "shared_funding_source"
+    | "synchronized_activity"
+    | "common_counterparty"
+    | "cross_chain_link"
+    | "behavioral_similarity";
+  confidence: number;
+  weight: number;
+  description: string;
+  related_addresses: string[];
 }
 
 export interface ClusterEdge {
   source: string;
   target: string;
-  relation: string;
+  relation:
+    | "shared_funding_source"
+    | "synchronized_activity"
+    | "common_counterparty"
+    | "cross_chain_bridge"
+    | "co_funded";
   strength: number;
+  confidence: number;
+  shared_counterparties: number;
+  same_entity_likelihood: number;
+  evidence: ClusterHeuristicEvidence[];
 }
 
 export interface WalletClusterResponse {
+  cluster_id: string;
   root_address: string;
   nodes: ClusterNode[];
   edges: ClusterEdge[];
-  cluster_risk: number;
+  heuristics: ClusterHeuristicEvidence[];
+  confidence: number;
+  cluster_score: number;
+  cluster_risk: RiskLevel;
+  cross_chain: boolean;
+  last_updated_at: string;
+  refresh_suggested_after_sec: number;
   narrative: string;
+}
+
+// Case management
+export interface CaseSummary {
+  id: number;
+  tenant_id: string;
+  title: string;
+  status: CaseStatus;
+  priority: CasePriority;
+  summary: string;
+  owner_email: string;
+  source_type: string;
+  source_ref: string;
+  primary_chain: string;
+  primary_address: string;
+  risk_score: number;
+  risk_level: RiskLevel;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+}
+
+export interface CaseTimelineEvent {
+  id: number;
+  case_id: number;
+  event_type: CaseEventType;
+  actor_email: string;
+  title: string;
+  body: string;
+  created_at: string;
+}
+
+export interface CaseNote {
+  id: number;
+  case_id: number;
+  note_type: "observation" | "hypothesis" | "evidence" | "decision";
+  body: string;
+  tags: string[];
+  author_email: string;
+  created_at: string;
+}
+
+export interface CaseEntity {
+  id: number;
+  case_id: number;
+  entity_type: CaseEntityType;
+  label: string;
+  chain: string;
+  reference: string;
+  risk_score: number | null;
+  risk_level: RiskLevel | null;
+  created_at: string;
+}
+
+export interface CaseAttachment {
+  id: number;
+  case_id: number;
+  file_name: string;
+  file_url: string;
+  content_type: string;
+  uploaded_by: string;
+  created_at: string;
+}
+
+export interface CaseDetail extends CaseSummary {
+  timeline: CaseTimelineEvent[];
+  notes: CaseNote[];
+  linked_entities: CaseEntity[];
+  attachments: CaseAttachment[];
+  activity: AuditEntry[];
+}
+
+export interface CaseListPayload {
+  items: CaseSummary[];
+}
+
+export interface CreateCaseRequest {
+  title: string;
+  summary: string;
+  priority: CasePriority;
+  owner_email?: string;
+  source_type?: string;
+  source_ref?: string;
+  primary_chain?: string;
+  primary_address?: string;
+  risk_score?: number;
+  risk_level?: RiskLevel;
+  tags?: string[];
+}
+
+export interface UpdateCaseRequest {
+  status?: CaseStatus;
+  priority?: CasePriority;
+  summary?: string;
+  owner_email?: string;
+  tags?: string[];
+}
+
+export interface CreateCaseNoteRequest {
+  note_type: "observation" | "hypothesis" | "evidence" | "decision";
+  body: string;
+  tags?: string[];
+}
+
+export interface CreateCaseEntityRequest {
+  entity_type: CaseEntityType;
+  label: string;
+  chain?: string;
+  reference: string;
+  risk_score?: number;
+  risk_level?: RiskLevel;
+}
+
+export interface CreateCaseAttachmentRequest {
+  file_name: string;
+  file_url: string;
+  content_type?: string;
 }
 
 
@@ -154,6 +394,16 @@ export interface WalletInput {
   sanctions_exposure_pct: number;
   mixer_exposure_pct: number;
   bridge_hops: number;
+}
+
+export interface WalletEnrichmentResponse extends WalletInput {
+  source: string;
+  fetched_at: string;
+  asset_price_usd: number;
+  balance_native: number;
+  recent_tx_scanned: number;
+  live_supported: boolean;
+  notes: string[];
 }
 
 export interface WalletExplainResponse {
@@ -199,6 +449,13 @@ export interface OAuthSignupRequest {
 export interface SignupBootstrapResponse {
   status: "ok";
   message: string;
+}
+
+export interface SetupStatusResponse {
+  status: "ok";
+  workspace_ready: boolean;
+  user_count: number;
+  first_signup_becomes_admin: boolean;
 }
 
 export interface PhoneSignupStartRequest {

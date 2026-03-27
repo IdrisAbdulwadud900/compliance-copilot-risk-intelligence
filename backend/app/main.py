@@ -1,375 +1,97 @@
 from contextlib import asynccontextmanager
-import secrets
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timedelta, timezone
-from typing import Dict, cast
+from datetime import datetime, timezone
+from typing import Optional, cast
 
-from app.ai_explainer import explain_alert
-from app.auth import get_current_principal, get_current_role, get_current_tenant, login_and_issue_token
-from app.db import init_db, list_recent_analyses, list_recent_audit_logs, save_analysis, save_audit_log, update_analysis_tags
-from app.db import create_user_if_not_exists, list_users_by_tenant
-from app.db import (
-    authenticate_user,
-    consume_invite,
-    create_invite,
-    get_invite_status,
-    list_invites_by_tenant,
-    revoke_invite,
-    update_user_password,
-)
-from app.db import (
-    add_to_watchlist,
-    list_watchlist,
-    remove_from_watchlist,
-    is_on_watchlist,
-    touch_watchlist_entry,
-    save_alert_event,
-    list_alert_events,
-    acknowledge_alert,
-    save_webhook,
-    list_webhooks,
-    delete_webhook,
-)
-from app.intelligence import fingerprint_wallet, detect_narrative
+from app.auth import get_current_principal, get_current_role, get_current_tenant
+from app.config import allowed_origins, config_warnings, database_runtime_summary, validate_runtime_config
+from app.db import init_db, list_recent_analyses, save_audit_log, update_analysis_tags
 from app.cluster import build_cluster
-from app.webhooks import fire_webhooks
+from app.migrations import migration_status_summary
+from app.observability import install_request_tracing
 from app.risk_engine import score_wallet
-from app.rate_limit import enforce_rate_limit, get_request_ip
-from app.sample_data import demo_alerts
+from app.rate_limit import enforce_rate_limit, get_request_ip, reset_rate_limits
+from app.routers.admin_team import router as admin_team_router
+from app.routers.alerts import router as alerts_router
+from app.routers.auth import router as auth_router
+from app.routers.cases import router as cases_router
+from app.routers.incidents import router as incidents_router
+from app.routers.intelligence import router as intelligence_router
+from app.routers.watchlist import router as watchlist_router
+from app.routers.webhooks import router as webhooks_router
 from app.schemas import (
-    AuditHistoryPayload,
-    AcceptInviteRequest,
     AnalysisEntry,
     AnalysisHistoryPayload,
     DashboardPayload,
-    InviteCreateRequest,
-    InviteListPayload,
-    InvitePublicStatusResponse,
-    InviteRevokeResponse,
-    InviteResponse,
-    LoginRequest,
-    LoginResponse,
-    PasswordChangeRequest,
-    PhoneSignupStartRequest,
-    PhoneSignupStartResponse,
-    PhoneSignupVerifyRequest,
-    OAuthSignupRequest,
-    SignupBootstrapResponse,
-    SignupEmailRequest,
     TagUpdateRequest,
     UserRole,
-    TeamUser,
-    TeamUserCreateRequest,
-    TeamUserListPayload,
     Blockchain,
     WalletExplainResponse,
     WalletInput,
     WalletScore,
     WalletIntelligenceResponse,
-    WatchlistAddRequest,
-    WatchlistPayload,
-    AlertEventPayload,
-    AlertAckRequest,
-    WebhookConfigRequest,
-    WebhookConfigPayload,
     WalletClusterResponse,
 )
 
-_pending_phone_codes: Dict[str, tuple[str, datetime]] = {}
-
-
-def _tenant_from_email(email: str) -> str:
-    domain = (email.split("@", 1)[1] if "@" in email else "demo.local").strip().lower()
-    safe = "".join(c if c.isalnum() else "-" for c in domain).strip("-")
-    return f"tenant-{safe or 'demo'}"
-
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_runtime_config()
+    reset_rate_limits()
     init_db()
     yield
 
 
-app = FastAPI(title="Crypto Compliance Copilot API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Crypto Compliance Copilot API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=list(allowed_origins()),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+install_request_tracing(app)
+app.include_router(admin_team_router)
+app.include_router(alerts_router)
+app.include_router(auth_router)
+app.include_router(cases_router)
+app.include_router(incidents_router)
+app.include_router(intelligence_router)
+app.include_router(watchlist_router)
+app.include_router(webhooks_router)
+
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "service": "crypto-compliance-copilot-api",
+        "version": app.version,
+        "database": database_runtime_summary(),
+        "migrations": migration_status_summary(),
+        "warnings": config_warnings(),
+    }
 
 
-@app.post("/auth/login", response_model=LoginResponse)
-def auth_login(payload: LoginRequest, request: Request) -> LoginResponse:
-    client_ip = get_request_ip(request)
-    enforce_rate_limit("auth", f"login:{client_ip}")
+@app.get("/ready")
+def ready() -> dict[str, object]:
+    from app.db import db_healthcheck
 
-    result = login_and_issue_token(payload.email, payload.password)
-    if not result:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
-    token, email, tenant_id, role = result
-    created_at = datetime.now(timezone.utc).isoformat()
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=email,
-        action="auth.login",
-        target="session",
-        details=f"User logged in with role={role}",
-        created_at=created_at,
-    )
-    return LoginResponse(access_token=token, tenant_id=tenant_id, email=email, role=role)
-
-
-@app.post("/auth/signup", response_model=LoginResponse)
-def auth_signup(payload: SignupEmailRequest, request: Request) -> LoginResponse:
-    client_ip = get_request_ip(request)
-    enforce_rate_limit("auth", f"signup:{client_ip}")
-
-    created_at = datetime.now(timezone.utc).isoformat()
-    tenant_id = _tenant_from_email(payload.email)
-    normalized_email = payload.email.strip().lower()
-
-    create_user_if_not_exists(
-        email=normalized_email,
-        password=payload.password,
-        tenant_id=tenant_id,
-        role=payload.role,
-        created_at=created_at,
-    )
-
-    result = login_and_issue_token(normalized_email, payload.password)
-    if not result:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unable to create account")
-
-    token, email, tenant_id, role = result
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=email,
-        action="auth.signup",
-        target=email,
-        details=f"New account created via email signup role={role}",
-        created_at=created_at,
-    )
-    return LoginResponse(access_token=token, tenant_id=tenant_id, email=email, role=role)
-
-
-@app.post("/auth/signup/oauth", response_model=SignupBootstrapResponse)
-def auth_signup_oauth(payload: OAuthSignupRequest, request: Request) -> SignupBootstrapResponse:
-    client_ip = get_request_ip(request)
-    enforce_rate_limit("auth", f"oauth_signup:{client_ip}")
-
-    created_at = datetime.now(timezone.utc).isoformat()
-    tenant_id = _tenant_from_email(payload.email)
-    normalized_email = payload.email.strip().lower()
-    temp_password = f"oauth-{payload.provider}-{secrets.token_urlsafe(12)}"
-
-    create_user_if_not_exists(
-        email=normalized_email,
-        password=temp_password,
-        tenant_id=tenant_id,
-        role="analyst",
-        created_at=created_at,
-    )
-
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=normalized_email,
-        action=f"auth.signup.{payload.provider}",
-        target=normalized_email,
-        details=f"OAuth bootstrap created for provider={payload.provider}",
-        created_at=created_at,
-    )
-    return SignupBootstrapResponse(
-        message=f"{payload.provider.capitalize()} signup bootstrap completed. Please sign in with your email and password flow until full OAuth redirect is enabled.",
-    )
-
-
-@app.post("/auth/signup/phone/start", response_model=PhoneSignupStartResponse)
-def auth_signup_phone_start(payload: PhoneSignupStartRequest, request: Request) -> PhoneSignupStartResponse:
-    client_ip = get_request_ip(request)
-    enforce_rate_limit("auth", f"phone_start:{client_ip}")
-
-    phone = payload.phone.strip()
-    code = f"{secrets.randbelow(900000) + 100000}"
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-    _pending_phone_codes[phone] = (code, expires_at)
-    return PhoneSignupStartResponse(
-        message="Verification code generated. Use this code in the verify step.",
-        code_hint=f"demo-{code}",
-    )
-
-
-@app.post("/auth/signup/phone/verify", response_model=LoginResponse)
-def auth_signup_phone_verify(payload: PhoneSignupVerifyRequest, request: Request) -> LoginResponse:
-    client_ip = get_request_ip(request)
-    enforce_rate_limit("auth", f"phone_verify:{client_ip}")
-
-    phone = payload.phone.strip()
-    pending = _pending_phone_codes.get(phone)
-    if not pending:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No verification request for this phone")
-
-    expected_code, expires_at = pending
-    if datetime.now(timezone.utc) > expires_at:
-        _pending_phone_codes.pop(phone, None)
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification code expired")
-
-    if payload.code.strip() != expected_code:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid verification code")
-
-    normalized_phone = "".join(ch for ch in phone if ch.isdigit()) or "user"
-    email = f"phone-{normalized_phone}@phone.demo"
-    tenant_id = "tenant-phone"
-    created_at = datetime.now(timezone.utc).isoformat()
-    bootstrap_password = f"phone-{normalized_phone}-verified"
-
-    create_user_if_not_exists(
-        email=email,
-        password=bootstrap_password,
-        tenant_id=tenant_id,
-        role="analyst",
-        created_at=created_at,
-    )
-
-    result = login_and_issue_token(email, bootstrap_password)
-    if not result:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Phone verification failed")
-
-    token, login_email, login_tenant, role = result
-    _pending_phone_codes.pop(phone, None)
-    save_audit_log(
-        tenant_id=login_tenant,
-        actor_email=login_email,
-        action="auth.signup.phone",
-        target=login_email,
-        details="Account verified via phone code",
-        created_at=created_at,
-    )
-    return LoginResponse(access_token=token, tenant_id=login_tenant, email=login_email, role=role)
-
-
-@app.post("/auth/accept-invite", response_model=LoginResponse)
-def auth_accept_invite(payload: AcceptInviteRequest, request: Request) -> LoginResponse:
-    client_ip = get_request_ip(request)
-    enforce_rate_limit("auth", f"accept_invite:{client_ip}")
-
-    accepted_at = datetime.now(timezone.utc).isoformat()
-    consumed = consume_invite(payload.token, accepted_at)
-    if not consumed:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired invite")
-
-    email, tenant_id, role = consumed
-    user = create_user_if_not_exists(
-        email=email,
-        password=payload.password,
-        tenant_id=tenant_id,
-        role=role,
-        created_at=accepted_at,
-    )
-    update_user_password(user.email, payload.password)
-
-    token, login_email, login_tenant, login_role = login_and_issue_token(user.email, payload.password) or (
-        "",
-        "",
-        "",
-        "viewer",
-    )
-    if not token:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invite acceptance failed")
-
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=login_email,
-        action="auth.accept_invite",
-        target="session",
-        details=f"Accepted invite as role={login_role}",
-        created_at=accepted_at,
-    )
-    return LoginResponse(
-        access_token=token,
-        tenant_id=login_tenant,
-        email=login_email,
-        role=login_role,
-    )
-
-
-@app.get("/auth/invite-status", response_model=InvitePublicStatusResponse)
-def auth_invite_status(token: str, request: Request) -> InvitePublicStatusResponse:
-    client_ip = get_request_ip(request)
-    enforce_rate_limit("invite_status", client_ip)
-
-    status_info = get_invite_status(token)
-    if not status_info:
-        return InvitePublicStatusResponse(token=token, status="expired")
-
-    invite_token, email, role, expires_at, status = status_info
-    return InvitePublicStatusResponse(
-        token=invite_token,
-        status=status,
-        email=email,
-        role=role,
-        expires_at=expires_at,
-    )
-
-
-@app.post("/auth/change-password")
-def auth_change_password(
-    payload: PasswordChangeRequest,
-    request: Request,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> dict[str, str]:
-    tenant_id, _, actor_email = principal
-    client_ip = get_request_ip(request)
-    enforce_rate_limit("auth", f"change_password:{client_ip}")
-
-    if actor_email == "api-key-user":
-        from fastapi import HTTPException, status
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password change requires user session token",
-        )
-
-    authed = authenticate_user(actor_email, payload.current_password)
-    if not authed:
-        from fastapi import HTTPException, status
-
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
-
-    update_user_password(actor_email, payload.new_password)
-    changed_at = datetime.now(timezone.utc).isoformat()
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=actor_email,
-        action="auth.change_password",
-        target=actor_email,
-        details="User changed own password",
-        created_at=changed_at,
-    )
-    return {"status": "ok"}
+    db_ok = db_healthcheck()
+    status_value = "ok" if db_ok else "degraded"
+    return {
+        "status": status_value,
+        "service": "crypto-compliance-copilot-api",
+        "version": app.version,
+        "checks": {
+            "database": "ok" if db_ok else "error",
+            "config": "ok" if not config_warnings() else "warning",
+        },
+        "database": database_runtime_summary(),
+        "migrations": migration_status_summary(),
+        "warnings": config_warnings(),
+    }
 
 
 @app.get("/dashboard", response_model=DashboardPayload)
@@ -391,9 +113,6 @@ def dashboard(tenant_id: str = Depends(get_current_tenant)) -> DashboardPayload:
             }
         )
 
-    if not alerts:
-        alerts = demo_alerts()
-
     total = len(analyses)
     critical = len([a for a in analyses if a.risk_level == "critical"])
     avg_score = round(sum(a.score for a in analyses) / total, 1) if total > 0 else 0.0
@@ -405,53 +124,6 @@ def dashboard(tenant_id: str = Depends(get_current_tenant)) -> DashboardPayload:
         avg_risk_score=avg_score,
         trend_7d=[12, 14, 11, 16, 19, 17, 23],
         alerts=alerts,
-    )
-
-
-@app.post("/wallets/score", response_model=WalletScore)
-def wallet_score(
-    wallet: WalletInput,
-    tenant_id: str = Depends(get_current_tenant),
-    role: UserRole = Depends(get_current_role),
-) -> WalletScore:
-    _ = tenant_id
-    _ = role
-    return score_wallet(wallet)
-
-
-@app.post("/wallets/explain")
-def wallet_explain(
-    wallet: WalletInput,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> WalletExplainResponse:
-    tenant_id, role, actor_email = principal
-    if role not in ("admin", "analyst"):
-        from fastapi import HTTPException, status
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient role: explain requires admin or analyst",
-        )
-
-    scored = score_wallet(wallet)
-    explanation = explain_alert(scored, wallet)
-    created_at = datetime.now(timezone.utc).isoformat()
-    saved = save_analysis(tenant_id, wallet, scored, explanation, created_at)
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=actor_email,
-        action="analysis.explain",
-        target=wallet.address,
-        details=f"Score={saved.score} level={saved.risk_level}",
-        created_at=created_at,
-    )
-    return WalletExplainResponse(
-        analysis_id=saved.id,
-        chain=saved.chain,
-        address=saved.address,
-        score=saved.score,
-        risk_level=saved.risk_level,
-        explanation=saved.explanation,
     )
 
 
@@ -543,245 +215,15 @@ def export_analyses_csv(
     )
 
 
-@app.get("/audit-logs", response_model=AuditHistoryPayload)
-def audit_logs(
-    limit: int = 50,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> AuditHistoryPayload:
-    tenant_id, role, _ = principal
-    if role != "admin":
-        from fastapi import HTTPException, status
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient role: audit logs require admin",
-        )
-
-    safe_limit = max(1, min(200, limit))
-    items = list_recent_audit_logs(tenant_id=tenant_id, limit=safe_limit)
-    return AuditHistoryPayload(items=items)
-
-
-@app.get("/users", response_model=TeamUserListPayload)
-def list_users(
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> TeamUserListPayload:
-    tenant_id, role, _ = principal
-    if role != "admin":
-        from fastapi import HTTPException, status
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient role: user listing requires admin",
-        )
-
-    items = list_users_by_tenant(tenant_id=tenant_id)
-    return TeamUserListPayload(items=items)
-
-
-@app.post("/users", response_model=TeamUser)
-def create_user_endpoint(
-    payload: TeamUserCreateRequest,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> TeamUser:
-    tenant_id, role, actor_email = principal
-    if role != "admin":
-        from fastapi import HTTPException, status
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient role: user creation requires admin",
-        )
-
-    created_at = datetime.now(timezone.utc).isoformat()
-    user = create_user_if_not_exists(
-        email=payload.email,
-        password=payload.password,
-        tenant_id=tenant_id,
-        role=payload.role,
-        created_at=created_at,
-    )
-
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=actor_email,
-        action="team.user.create",
-        target=user.email,
-        details=f"Assigned role={user.role}",
-        created_at=created_at,
-    )
-    return user
-
-
-@app.post("/users/invite", response_model=InviteResponse)
-def invite_user_endpoint(
-    payload: InviteCreateRequest,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> InviteResponse:
-    tenant_id, role, actor_email = principal
-    if role != "admin":
-        from fastapi import HTTPException, status
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient role: invite creation requires admin",
-        )
-
-    created_at = datetime.now(timezone.utc).isoformat()
-    token, expires_at = create_invite(
-        email=payload.email,
-        tenant_id=tenant_id,
-        role=payload.role,
-        created_at=created_at,
-    )
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=actor_email,
-        action="team.user.invite",
-        target=payload.email.strip().lower(),
-        details=f"Issued invite role={payload.role}",
-        created_at=created_at,
-    )
-    return InviteResponse(
-        token=token,
-        email=payload.email.strip().lower(),
-        role=payload.role,
-        expires_at=expires_at,
-    )
-
-
-@app.get("/users/invites", response_model=InviteListPayload)
-def list_invites_endpoint(
-    limit: int = 50,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> InviteListPayload:
-    tenant_id, role, _ = principal
-    if role != "admin":
-        from fastapi import HTTPException, status
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient role: invite listing requires admin",
-        )
-
-    safe_limit = max(1, min(200, limit))
-    items = list_invites_by_tenant(tenant_id=tenant_id, limit=safe_limit)
-    return InviteListPayload(items=items)
-
-
-@app.delete("/users/invites/{token}", response_model=InviteRevokeResponse)
-def revoke_invite_endpoint(
-    token: str,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> InviteRevokeResponse:
-    tenant_id, role, actor_email = principal
-    if role != "admin":
-        from fastapi import HTTPException, status
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient role: invite revocation requires admin",
-        )
-
-    revoked_at = datetime.now(timezone.utc).isoformat()
-    revoked = revoke_invite(token=token, tenant_id=tenant_id, revoked_at=revoked_at)
-
-    if revoked:
-        save_audit_log(
-            tenant_id=tenant_id,
-            actor_email=actor_email,
-            action="team.user.invite.revoke",
-            target=token,
-            details="Revoked pending invite",
-            created_at=revoked_at,
-        )
-
-    return InviteRevokeResponse(token=token, revoked=revoked)
-
-
-# ─── Intelligence ────────────────────────────────────────────────────────────
-
-@app.post("/wallets/intelligence", response_model=WalletIntelligenceResponse)
-def wallet_intelligence(
-    wallet: WalletInput,
-    request: Request,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> WalletIntelligenceResponse:
-    tenant_id, role, actor_email = principal
-    if role not in ("admin", "analyst"):
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
-
-    client_ip = get_request_ip(request)
-    enforce_rate_limit("intelligence", f"{tenant_id}:{client_ip}")
-
-    scored = score_wallet(wallet)
-    explanation = explain_alert(scored, wallet)
-    fingerprints = fingerprint_wallet(wallet, scored)
-    narrative = detect_narrative(wallet, scored, fingerprints)
-
-    created_at = datetime.now(timezone.utc).isoformat()
-    saved = save_analysis(tenant_id, wallet, scored, explanation, created_at)
-
-    # watchlist hit check — fire alert if watched
-    watched = is_on_watchlist(tenant_id, wallet.chain, wallet.address)
-    if watched:
-        touch_watchlist_entry(tenant_id, wallet.chain, wallet.address, scored.score, created_at)
-        if scored.score >= 40:
-            alert = save_alert_event(
-                tenant_id=tenant_id,
-                trigger="watchlist_activity",
-                chain=wallet.chain,
-                address=wallet.address,
-                score=scored.score,
-                risk_level=scored.risk_level,
-                title=f"Watchlist hit: {wallet.address[:10]}…",
-                body=f"Score {scored.score} ({scored.risk_level}). {narrative.summary}",
-                created_at=created_at,
-            )
-            hooks = list_webhooks(tenant_id)
-            fire_webhooks(hooks, "alert.fired", alert)
-
-    # auto-alert on critical scores even if not on watchlist
-    if scored.score >= 85 and not watched:
-        alert = save_alert_event(
-            tenant_id=tenant_id,
-            trigger="score_threshold",
-            chain=wallet.chain,
-            address=wallet.address,
-            score=scored.score,
-            risk_level=scored.risk_level,
-            title=f"Critical score: {wallet.address[:10]}… ({scored.score})",
-            body=f"{narrative.summary} Recommended: {narrative.recommended_action_label}.",
-            created_at=created_at,
-        )
-        hooks = list_webhooks(tenant_id)
-        fire_webhooks(hooks, "wallet.flagged", alert)
-
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=actor_email,
-        action="analysis.intelligence",
-        target=wallet.address,
-        details=f"Score={saved.score} action={narrative.recommended_action} confidence={narrative.confidence:.0%}",
-        created_at=created_at,
-    )
-    return WalletIntelligenceResponse(
-        analysis_id=saved.id,
-        chain=saved.chain,
-        address=saved.address,
-        score=saved.score,
-        risk_level=saved.risk_level,
-        explanation=saved.explanation,
-        fingerprints=fingerprints,
-        narrative=narrative,
-    )
-
-
 @app.get("/wallets/{address}/cluster", response_model=WalletClusterResponse)
 def wallet_cluster(
     address: str,
     chain: str = "ethereum",
+    txn_24h: int = 0,
+    volume_24h_usd: float = 0,
+    sanctions_exposure_pct: float = 0,
+    mixer_exposure_pct: float = 0,
+    bridge_hops: int = 0,
     principal: tuple[str, UserRole, str] = Depends(get_current_principal),
 ) -> WalletClusterResponse:
     tenant_id, role, _ = principal
@@ -789,6 +231,8 @@ def wallet_cluster(
         from fastapi import HTTPException, status
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
 
+    from app.live_cluster import build_live_cluster
+    from app.live_wallet import enrich_wallet_input_live
     from app.schemas import WalletInput as WI
     # validate chain
     valid_chains = ["ethereum", "solana", "arbitrum", "base", "bsc", "polygon"]
@@ -799,190 +243,44 @@ def wallet_cluster(
     dummy_wallet = WI(
         address=address,
         chain=chain_value,
-        txn_24h=0,
-        volume_24h_usd=0,
-        sanctions_exposure_pct=0,
-        mixer_exposure_pct=0,
-        bridge_hops=0,
+        txn_24h=max(0, txn_24h),
+        volume_24h_usd=max(0, volume_24h_usd),
+        sanctions_exposure_pct=min(100.0, max(0.0, sanctions_exposure_pct)),
+        mixer_exposure_pct=min(100.0, max(0.0, mixer_exposure_pct)),
+        bridge_hops=max(0, bridge_hops),
     )
-    scored = score_wallet(dummy_wallet)
-    return build_cluster(dummy_wallet, scored.score)
+
+    cluster_wallet = dummy_wallet
+    if (
+        chain_value == "ethereum"
+        and txn_24h == 0
+        and volume_24h_usd == 0
+        and sanctions_exposure_pct == 0
+        and mixer_exposure_pct == 0
+        and bridge_hops == 0
+    ):
+        try:
+            enriched = enrich_wallet_input_live(address=address, chain=chain_value)
+            cluster_wallet = WI(
+                address=enriched.address,
+                chain=enriched.chain,
+                txn_24h=enriched.txn_24h,
+                volume_24h_usd=enriched.volume_24h_usd,
+                sanctions_exposure_pct=enriched.sanctions_exposure_pct,
+                mixer_exposure_pct=enriched.mixer_exposure_pct,
+                bridge_hops=enriched.bridge_hops,
+            )
+        except Exception:
+            cluster_wallet = dummy_wallet
+
+    scored = score_wallet(cluster_wallet)
+    try:
+        live_cluster = build_live_cluster(cluster_wallet, scored.score)
+        if live_cluster is not None:
+            return live_cluster
+    except Exception:
+        pass
+
+    return build_cluster(cluster_wallet, scored.score)
 
 
-# ─── Watchlist ────────────────────────────────────────────────────────────────
-
-@app.get("/watchlist", response_model=WatchlistPayload)
-def get_watchlist(
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> WatchlistPayload:
-    tenant_id, _, _ = principal
-    items = list_watchlist(tenant_id)
-    return WatchlistPayload(items=items)
-
-
-@app.post("/watchlist")
-def add_watchlist_entry(
-    payload: WatchlistAddRequest,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-):
-    tenant_id, role, actor_email = principal
-    if role not in ("admin", "analyst"):
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
-
-    created_at = datetime.now(timezone.utc).isoformat()
-    entry = add_to_watchlist(
-        tenant_id=tenant_id,
-        chain=payload.chain,
-        address=payload.address,
-        label=payload.label,
-        created_by=actor_email,
-        alert_on_activity=payload.alert_on_activity,
-        created_at=created_at,
-    )
-    if not entry:
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already on watchlist")
-
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=actor_email,
-        action="watchlist.add",
-        target=payload.address,
-        details=f"chain={payload.chain} label={payload.label or ''}",
-        created_at=created_at,
-    )
-    return entry
-
-
-@app.delete("/watchlist/{entry_id}")
-def remove_watchlist_entry(
-    entry_id: int,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-):
-    tenant_id, role, actor_email = principal
-    if role not in ("admin", "analyst"):
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
-
-    removed = remove_from_watchlist(tenant_id, entry_id)
-    if not removed:
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
-
-    removed_at = datetime.now(timezone.utc).isoformat()
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=actor_email,
-        action="watchlist.remove",
-        target=str(entry_id),
-        details="Removed watchlist entry",
-        created_at=removed_at,
-    )
-    return {"removed": True}
-
-
-# ─── Alert Events ─────────────────────────────────────────────────────────────
-
-@app.get("/alert-events", response_model=AlertEventPayload)
-def get_alert_events(
-    limit: int = 50,
-    unacked_only: bool = False,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> AlertEventPayload:
-    tenant_id, _, _ = principal
-    safe_limit = max(1, min(200, limit))
-    items = list_alert_events(tenant_id=tenant_id, limit=safe_limit, unacked_only=unacked_only)
-    unread = sum(1 for a in items if not a.acknowledged)
-    return AlertEventPayload(items=items, unread_count=unread)
-
-
-@app.post("/alert-events/{alert_id}/ack")
-def ack_alert_event(
-    alert_id: int,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-):
-    tenant_id, _, actor_email = principal
-    acked_at = datetime.now(timezone.utc).isoformat()
-    ok = acknowledge_alert(alert_id, tenant_id)
-    if not ok:
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=actor_email,
-        action="alert.ack",
-        target=str(alert_id),
-        details="Acknowledged alert event",
-        created_at=acked_at,
-    )
-    return {"acknowledged": True}
-
-
-# ─── Webhooks ─────────────────────────────────────────────────────────────────
-
-@app.get("/webhooks", response_model=WebhookConfigPayload)
-def get_webhooks(
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-) -> WebhookConfigPayload:
-    tenant_id, role, _ = principal
-    if role != "admin":
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
-    items = list_webhooks(tenant_id)
-    return WebhookConfigPayload(items=items)
-
-
-@app.post("/webhooks")
-def create_webhook(
-    payload: WebhookConfigRequest,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-):
-    tenant_id, role, actor_email = principal
-    if role != "admin":
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
-
-    created_at = datetime.now(timezone.utc).isoformat()
-    webhook = save_webhook(
-        tenant_id=tenant_id,
-        url=payload.url,
-        events=payload.events,
-        created_at=created_at,
-    )
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=actor_email,
-        action="webhook.create",
-        target=payload.url,
-        details=f"events={','.join(payload.events)}",
-        created_at=created_at,
-    )
-    return webhook
-
-
-@app.delete("/webhooks/{webhook_id}")
-def remove_webhook(
-    webhook_id: int,
-    principal: tuple[str, UserRole, str] = Depends(get_current_principal),
-):
-    tenant_id, role, actor_email = principal
-    if role != "admin":
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
-
-    removed = delete_webhook(webhook_id, tenant_id)
-    if not removed:
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
-
-    removed_at = datetime.now(timezone.utc).isoformat()
-    save_audit_log(
-        tenant_id=tenant_id,
-        actor_email=actor_email,
-        action="webhook.delete",
-        target=str(webhook_id),
-        details="Deleted webhook",
-        created_at=removed_at,
-    )
-    return {"removed": True}

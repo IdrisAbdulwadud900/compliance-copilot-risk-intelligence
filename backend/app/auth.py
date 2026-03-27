@@ -1,56 +1,25 @@
-import os
-from functools import lru_cache
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 from fastapi import Header, HTTPException, status
 from jose import JWTError, jwt
 
+from app.config import api_key_principals, jwt_algo, jwt_secret, token_minutes
 from app.db import authenticate_user, init_db
 from app.schemas import UserRole
 
 
-@lru_cache(maxsize=1)
-def _api_key_map() -> Dict[str, str]:
-    raw = os.getenv("COMPLIANCE_API_KEYS", "").strip()
-    if not raw:
-        return {"demo-key": "demo-tenant"}
-
-    mapping: Dict[str, str] = {}
-    for pair in raw.split(","):
-        pair = pair.strip()
-        if not pair or ":" not in pair:
-            continue
-        key, tenant = pair.split(":", 1)
-        key = key.strip()
-        tenant = tenant.strip()
-        if key and tenant:
-            mapping[key] = tenant
-
-    if not mapping:
-        mapping = {"demo-key": "demo-tenant"}
-
-    return mapping
-
-
-def _jwt_secret() -> str:
-    return os.getenv("COMPLIANCE_JWT_SECRET", "dev-secret-change-me")
-
-
-def _jwt_algo() -> str:
-    return os.getenv("COMPLIANCE_JWT_ALG", "HS256")
-
-
 def create_access_token(email: str, tenant_id: str, role: UserRole) -> str:
-    minutes = int(os.getenv("COMPLIANCE_TOKEN_MINUTES", "480"))
+    minutes = token_minutes()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     payload = {
         "sub": email,
         "tenant": tenant_id,
         "role": role,
+        "iat": int(datetime.now(timezone.utc).timestamp()),
         "exp": int(expires_at.timestamp()),
     }
-    return jwt.encode(payload, _jwt_secret(), algorithm=_jwt_algo())
+    return jwt.encode(payload, jwt_secret(), algorithm=jwt_algo())
 
 
 def login_and_issue_token(
@@ -73,19 +42,23 @@ def _tenant_from_api_key(x_api_key: str) -> str:
             detail="Missing API key",
         )
 
-    tenant = _api_key_map().get(x_api_key)
-    if not tenant:
+    principal = api_key_principals().get(x_api_key)
+    if not principal:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
         )
 
+    tenant, _ = principal
     return tenant
 
 
 def _principal_from_api_key(x_api_key: str) -> Tuple[str, UserRole, str]:
-    tenant = _tenant_from_api_key(x_api_key)
-    return tenant, "admin", "api-key-user"
+    principal = api_key_principals().get(x_api_key)
+    if not principal:
+        _tenant_from_api_key(x_api_key)
+    tenant, role = principal or ("", "viewer")
+    return tenant, role, "api-key-user"
 
 
 def get_current_principal(
@@ -95,7 +68,7 @@ def get_current_principal(
     if authorization.startswith("Bearer "):
         token = authorization.replace("Bearer ", "", 1).strip()
         try:
-            payload = jwt.decode(token, _jwt_secret(), algorithms=[_jwt_algo()])
+            payload = jwt.decode(token, jwt_secret(), algorithms=[jwt_algo()])
             tenant = str(payload.get("tenant", ""))
             role = str(payload.get("role", ""))
             email = str(payload.get("sub", ""))

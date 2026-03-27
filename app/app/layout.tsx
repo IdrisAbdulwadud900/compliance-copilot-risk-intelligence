@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Compliance Copilot",
-  description: "Simple AI-powered crypto risk monitoring dashboard",
+  description: "Crypto compliance workspace for wallet intelligence, watchlists, alerts, incidents, and investigations.",
 };
 
 export default function RootLayout({

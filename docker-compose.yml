@@ -10,9 +10,20 @@ services:
       - "8000:8000"
     environment:
       COMPLIANCE_DB_PATH: /data/compliance.db
-      COMPLIANCE_JWT_SECRET: ${COMPLIANCE_JWT_SECRET:-your-secret-key-change-in-prod}
+      COMPLIANCE_DATABASE_URL: ${COMPLIANCE_DATABASE_URL:-}
+      COMPLIANCE_ENV: ${COMPLIANCE_ENV:-production}
+      COMPLIANCE_ALLOWED_ORIGINS: ${COMPLIANCE_ALLOWED_ORIGINS:?set COMPLIANCE_ALLOWED_ORIGINS}
+      COMPLIANCE_JWT_SECRET: ${COMPLIANCE_JWT_SECRET:?set COMPLIANCE_JWT_SECRET}
+      COMPLIANCE_WEBHOOK_SECRET: ${COMPLIANCE_WEBHOOK_SECRET:?set COMPLIANCE_WEBHOOK_SECRET}
+      COMPLIANCE_API_KEYS: ${COMPLIANCE_API_KEYS:-}
     volumes:
       - compliance_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   frontend:
@@ -23,9 +34,17 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_BASE: http://localhost:8000
+      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://backend:8000}
+      NEXT_PUBLIC_API_KEY: ${NEXT_PUBLIC_API_KEY:-}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "-", "http://127.0.0.1:3000"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
 volumes:

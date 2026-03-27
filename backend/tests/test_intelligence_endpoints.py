@@ -9,6 +9,38 @@ def _login(client: TestClient, email: str, password: str) -> str:
     return response.json()["access_token"]
 
 
+def test_explain_endpoint_returns_saved_explanation(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "explain_flow.db")
+    monkeypatch.setenv("COMPLIANCE_DB_PATH", db_path)
+    monkeypatch.setenv("COMPLIANCE_ADMIN_EMAIL", "owner@test.local")
+    monkeypatch.setenv("COMPLIANCE_ADMIN_PASSWORD", "OwnerPass123!")
+    monkeypatch.setenv("COMPLIANCE_ADMIN_TENANT", "tenant-a")
+    monkeypatch.setenv("COMPLIANCE_ADMIN_ROLE", "admin")
+
+    with TestClient(app) as client:
+        token = _login(client, "owner@test.local", "OwnerPass123!")
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.post(
+            "/wallets/explain",
+            headers=headers,
+            json={
+                "chain": "ethereum",
+                "address": "0xEXPLAIN1122334455",
+                "txn_24h": 120,
+                "volume_24h_usd": 220000,
+                "sanctions_exposure_pct": 7,
+                "mixer_exposure_pct": 12,
+                "bridge_hops": 3,
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["analysis_id"] > 0
+        assert payload["address"] == "0xEXPLAIN1122334455"
+        assert payload["explanation"]
+        assert payload["risk_level"] in {"low", "medium", "high", "critical"}
+
+
 def test_intelligence_watchlist_alerts_webhooks_cluster_flow(tmp_path, monkeypatch):
     db_path = str(tmp_path / "intel_flow.db")
     monkeypatch.setenv("COMPLIANCE_DB_PATH", db_path)
@@ -152,3 +184,46 @@ def test_viewer_cannot_perform_restricted_intelligence_actions(tmp_path, monkeyp
 
         webhooks = client.get("/webhooks", headers=viewer_headers)
         assert webhooks.status_code == 403
+
+
+def test_wallet_enrichment_endpoint_returns_live_shape(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "wallet_enrich.db")
+    monkeypatch.setenv("COMPLIANCE_DB_PATH", db_path)
+    monkeypatch.setenv("COMPLIANCE_ADMIN_EMAIL", "owner@test.local")
+    monkeypatch.setenv("COMPLIANCE_ADMIN_PASSWORD", "OwnerPass123!")
+    monkeypatch.setenv("COMPLIANCE_ADMIN_TENANT", "tenant-a")
+    monkeypatch.setenv("COMPLIANCE_ADMIN_ROLE", "admin")
+
+    def fake_enrichment(address: str, chain: str):
+        return {
+            "chain": chain,
+            "address": address,
+            "txn_24h": 12,
+            "volume_24h_usd": 45678.9,
+            "sanctions_exposure_pct": 0,
+            "mixer_exposure_pct": 0,
+            "bridge_hops": 0,
+            "source": "test-source",
+            "fetched_at": "2026-03-25T00:00:00+00:00",
+            "asset_price_usd": 2100.5,
+            "balance_native": 3.25,
+            "recent_tx_scanned": 24,
+            "live_supported": True,
+            "notes": ["test note"],
+        }
+
+    monkeypatch.setattr("app.routers.intelligence.enrich_wallet_input_live", fake_enrichment)
+
+    with TestClient(app) as client:
+        token = _login(client, "owner@test.local", "OwnerPass123!")
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.get(
+            "/wallets/0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045/enrich?chain=ethereum",
+            headers=headers,
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["address"] == "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
+        assert payload["txn_24h"] == 12
+        assert payload["source"] == "test-source"
+        assert payload["recent_tx_scanned"] == 24
