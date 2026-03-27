@@ -110,6 +110,112 @@ PYTHONPATH=. python -m app.cli --env-file .env preflight --url http://127.0.0.1:
 
 ---
 
+## Vercel (Backend + Frontend Full Stack)
+
+This is the recommended approach for quick production deployment with minimal ops.
+
+### Prerequisites
+- GitHub repository connected to Vercel
+- CLI: `npm install -g vercel`
+- Postgres database (see "Setting Up Postgres" section below)
+
+### Backend Setup on Vercel
+
+1. **Deploy Backend Function**
+   ```bash
+   cd backend
+   vercel --prod
+   ```
+
+2. **Set Production Environment Variables**
+   On Vercel Dashboard → Backend Project → Settings → Environment Variables (Production):
+   ```
+   COMPLIANCE_ENV=production
+   COMPLIANCE_ALLOWED_ORIGINS=https://your-frontend-url.vercel.app
+   COMPLIANCE_JWT_SECRET=<generate-strong-secret>
+   COMPLIANCE_WEBHOOK_SECRET=<generate-strong-secret>
+   COMPLIANCE_DATABASE_URL=postgresql://user:password@host:5432/dbname
+   COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP=false
+   COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=false
+   ```
+
+3. **Verify Deployment**
+   ```bash
+   curl https://your-backend.vercel.app/health
+   ```
+
+### Frontend Setup on Vercel
+
+1. **Deploy Frontend**
+   ```bash
+   cd app
+   vercel --prod
+   ```
+
+2. **Set Production Environment Variables**
+   On Vercel Dashboard → App Project → Settings → Environment Variables (Production):
+   ```
+   NEXT_PUBLIC_API_BASE=https://your-backend.vercel.app
+   NEXT_PUBLIC_ENABLE_PREVIEW_AUTH=false
+   ```
+
+3. **Redeploy to apply env vars**
+   ```bash
+   vercel --prod
+   ```
+
+### Setting Up Postgres
+
+The backend requires a persistent database. SQLite on Vercel uses `/tmp/` which is ephemeral.
+
+#### Option A: Neon (Recommended Free Tier)
+1. Go to [neon.tech](https://neon.tech)
+2. Sign up with GitHub (IdrisAbdulwadud900)
+3. Create a new project
+4. Copy the connection string: `postgresql://user:password@host/dbname`
+5. Add to Vercel backend env:
+   ```bash
+   vercel env add COMPLIANCE_DATABASE_URL production
+   # Paste the connection string when prompted
+   ```
+6. Redeploy the backend
+
+#### Option B: AWS RDS
+1. Create an RDS Postgres instance (db.t3.micro free tier eligible)
+2. Configure security groups to allow outbound from Vercel IPs
+3. Get the endpoint: `your-instance.region.rds.amazonaws.com`
+4. Create a database and user
+5. Connection string format:
+   ```
+   postgresql://username:password@your-instance.region.rds.amazonaws.com:5432/dbname
+   ```
+6. Add to Vercel backend env as above
+
+#### Option C: Managed Postgres (Supabase, Render, Railway)
+- Supabase: https://supabase.com (free tier with 500MB)
+- Render: https://render.com (free tier Postgres available)
+- Railway: https://railway.app (paid, $5/month minimum)
+
+All provide PostgreSQL connection strings compatible with the COMPLIANCE_DATABASE_URL format.
+
+### Migration & Verification
+
+Once the database is configured:
+
+1. **Verify connection**
+   ```bash
+   curl https://your-backend.vercel.app/ready
+   ```
+   Should show `"sqlite_in_production"` warning is gone.
+
+2. **Check migrations**
+   ```bash
+   curl https://your-backend.vercel.app/health | grep migrations
+   ```
+   Should show all 3 migrations applied.
+
+---
+
 ## Railway / Render (Backend Deployment)
 
 ### Railway (Recommended for simplicity)
