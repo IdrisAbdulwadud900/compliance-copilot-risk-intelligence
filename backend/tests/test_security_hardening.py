@@ -88,6 +88,22 @@ def test_health_sets_request_id_header(tmp_path, monkeypatch):
         assert response.headers["x-request-id"] == "req-test-123"
 
 
+def test_root_endpoint_returns_service_metadata(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "root.db")
+    monkeypatch.setenv("COMPLIANCE_DB_PATH", db_path)
+
+    with TestClient(app) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["service"] == "crypto-compliance-copilot-api"
+    assert payload["health_url"] == "/health"
+    assert payload["ready_url"] == "/ready"
+    assert payload["docs_url"] == "/docs"
+
+
 def test_private_webhook_url_rejected(tmp_path, monkeypatch):
     db_path = str(tmp_path / "webhook_guard.db")
     monkeypatch.setenv("COMPLIANCE_DB_PATH", db_path)

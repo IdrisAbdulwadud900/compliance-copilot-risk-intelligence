@@ -62,6 +62,20 @@ app.include_router(intelligence_router)
 app.include_router(watchlist_router)
 app.include_router(webhooks_router)
 
+@app.get("/")
+def root() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "service": "crypto-compliance-copilot-api",
+        "version": app.version,
+        "message": "Compliance Copilot backend is running.",
+        "docs_url": app.docs_url,
+        "openapi_url": app.openapi_url,
+        "health_url": "/health",
+        "ready_url": "/ready",
+    }
+
+
 @app.get("/health")
 def health() -> dict[str, object]:
     return {
