@@ -76,6 +76,7 @@ def test_ready_endpoint_reports_warnings(tmp_path, monkeypatch):
         assert payload["checks"]["database"] == "ok"
         assert payload["migrations"]["up_to_date"] is True
         assert "warnings" in payload
+        assert payload["status"] == "ok"
 
 
 def test_health_sets_request_id_header(tmp_path, monkeypatch):
@@ -134,6 +135,37 @@ def test_production_sqlite_emits_warning(monkeypatch):
 
     warnings = config_warnings()
     assert "sqlite_in_production" in warnings
+
+
+def test_ephemeral_sqlite_emits_warning_in_production(monkeypatch):
+    monkeypatch.setenv("COMPLIANCE_ENV", "production")
+    monkeypatch.setenv("COMPLIANCE_DB_PATH", "/tmp/copilot.db")
+
+    warnings = config_warnings()
+    assert "sqlite_in_production" in warnings
+    assert "ephemeral_sqlite_storage" in warnings
+
+
+def test_ready_endpoint_degrades_for_ephemeral_sqlite_in_production(monkeypatch):
+    monkeypatch.setenv("COMPLIANCE_ENV", "production")
+    monkeypatch.setenv("COMPLIANCE_DB_PATH", "/tmp/copilot.db")
+    monkeypatch.setenv("COMPLIANCE_JWT_SECRET", "prod-secret-value")
+    monkeypatch.setenv("COMPLIANCE_WEBHOOK_SECRET", "prod-webhook-secret")
+    monkeypatch.setenv("COMPLIANCE_ALLOWED_ORIGINS", "https://app.example.com")
+    monkeypatch.delenv("COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP", raising=False)
+    monkeypatch.delenv("COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS", raising=False)
+    monkeypatch.delenv("COMPLIANCE_ADMIN_PASSWORD", raising=False)
+
+    with TestClient(app) as client:
+        response = client.get("/ready")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "degraded"
+    assert payload["checks"]["database"] == "ok"
+    assert payload["checks"]["config"] == "warning"
+    assert "sqlite_in_production" in payload["warnings"]
+    assert "ephemeral_sqlite_storage" in payload["warnings"]
 
 
 def test_preview_bootstrap_warning_is_explicit(monkeypatch):

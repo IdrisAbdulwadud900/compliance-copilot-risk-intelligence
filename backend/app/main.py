@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional, cast
 
 from app.auth import get_current_principal, get_current_role, get_current_tenant
-from app.config import allowed_origins, config_warnings, database_runtime_summary, validate_runtime_config
+from app.config import allowed_origins, config_warnings, database_runtime_summary, is_production, validate_runtime_config
 from app.db import init_db, list_recent_analyses, save_audit_log, update_analysis_tags
 from app.cluster import build_cluster
 from app.migrations import migration_status_summary
@@ -93,18 +93,21 @@ def ready() -> dict[str, object]:
     from app.db import db_healthcheck
 
     db_ok = db_healthcheck()
-    status_value = "ok" if db_ok else "degraded"
+    warnings = config_warnings()
+    critical_warnings = {"sqlite_in_production", "ephemeral_sqlite_storage", "unsupported_database_url_scheme"}
+    has_critical_warnings = is_production() and any(item in critical_warnings for item in warnings)
+    status_value = "ok" if db_ok and not has_critical_warnings else "degraded"
     return {
         "status": status_value,
         "service": "crypto-compliance-copilot-api",
         "version": app.version,
         "checks": {
             "database": "ok" if db_ok else "error",
-            "config": "ok" if not config_warnings() else "warning",
+            "config": "ok" if not warnings else "warning",
         },
         "database": database_runtime_summary(),
         "migrations": migration_status_summary(),
-        "warnings": config_warnings(),
+        "warnings": warnings,
     }
 
 

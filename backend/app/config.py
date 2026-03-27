@@ -43,6 +43,14 @@ def database_runtime_summary() -> Dict[str, str]:
     return {"backend": runtime.backend, "target": runtime.target}
 
 
+def uses_ephemeral_sqlite_storage() -> bool:
+    runtime = resolve_database_runtime()
+    if runtime.backend != "sqlite":
+        return False
+    target = runtime.target.strip().lower()
+    return target == ":memory:" or target.startswith("/tmp/") or target.startswith("/var/tmp/")
+
+
 def _split_csv_env(name: str) -> List[str]:
     raw = os.getenv(name, "").strip()
     if not raw:
@@ -128,6 +136,8 @@ def config_warnings() -> List[str]:
     backend = database_backend()
     if is_production() and backend == "sqlite":
         warnings.append("sqlite_in_production")
+    if is_production() and uses_ephemeral_sqlite_storage():
+        warnings.append("ephemeral_sqlite_storage")
     if backend == "postgres":
         warnings.append("postgres_runtime_enabled_unvalidated")
     if backend == "unknown":
