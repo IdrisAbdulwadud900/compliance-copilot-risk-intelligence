@@ -123,8 +123,6 @@ def config_warnings() -> List[str]:
         warnings.append("jwt_secret_uses_default")
     if webhook_secret() == INSECURE_WEBHOOK_SECRET:
         warnings.append("webhook_secret_uses_default")
-    if not api_key_principals():
-        warnings.append("api_key_auth_disabled")
     if preview_bootstrap_enabled():
         warnings.append("preview_bootstrap_enabled")
     if preview_auth_methods_enabled():

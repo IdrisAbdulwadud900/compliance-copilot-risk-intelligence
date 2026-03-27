@@ -77,6 +77,7 @@ def test_ready_endpoint_reports_warnings(tmp_path, monkeypatch):
         assert payload["checks"]["persistence"] == "ok"
         assert payload["migrations"]["up_to_date"] is True
         assert "warnings" in payload
+        assert "api_key_auth_disabled" not in payload["warnings"]
         assert payload["status"] == "ok"
         assert payload["recommended_action"] == "none"
 
@@ -185,6 +186,14 @@ def test_preview_bootstrap_warning_is_explicit(monkeypatch):
     assert "preview_bootstrap_enabled" in warnings
     assert "preview_default_admin_enabled" in warnings
     assert "default_admin_password_configured" not in warnings
+
+
+def test_missing_api_keys_do_not_emit_warning(monkeypatch):
+    monkeypatch.delenv("COMPLIANCE_API_KEYS", raising=False)
+
+    warnings = config_warnings()
+
+    assert "api_key_auth_disabled" not in warnings
 
 
 def test_health_reports_database_runtime(tmp_path, monkeypatch):
