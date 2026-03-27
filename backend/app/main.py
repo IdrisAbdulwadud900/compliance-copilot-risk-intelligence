@@ -113,7 +113,7 @@ def ready() -> dict[str, object]:
         "migrations": migration_status_summary(),
         "warnings": warnings,
         "recommended_action": (
-            "Set COMPLIANCE_DATABASE_URL to a managed PostgreSQL connection string and redeploy."
+            "Set COMPLIANCE_DATABASE_URL or a standard DATABASE_URL/POSTGRES_URL PostgreSQL connection string and redeploy."
             if has_critical_warnings
             else "none"
         ),

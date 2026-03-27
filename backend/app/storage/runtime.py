@@ -8,6 +8,15 @@ from typing import Any, Iterable, Optional
 from urllib.parse import urlparse
 
 
+DATABASE_URL_ENV_CANDIDATES = (
+    "COMPLIANCE_DATABASE_URL",
+    "DATABASE_URL",
+    "POSTGRES_URL",
+    "POSTGRES_PRISMA_URL",
+    "POSTGRES_URL_NON_POOLING",
+)
+
+
 @dataclass(frozen=True)
 class DatabaseRuntime:
     backend: str
@@ -101,7 +110,11 @@ class DatabaseConnection:
 
 
 def database_url() -> str:
-    return os.getenv("COMPLIANCE_DATABASE_URL", "").strip()
+    for name in DATABASE_URL_ENV_CANDIDATES:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _redact_postgres_target(url: str) -> str:

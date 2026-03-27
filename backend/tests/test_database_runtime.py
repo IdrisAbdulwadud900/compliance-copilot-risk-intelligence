@@ -76,3 +76,23 @@ def test_normalize_query_for_postgres_rewrites_known_sqlite_patterns():
 def test_database_healthcheck_false_for_unreachable_postgres(monkeypatch):
     monkeypatch.setenv("COMPLIANCE_DATABASE_URL", "postgresql://user:pass@127.0.0.1:1/copilot")
     assert database_healthcheck() is False
+
+
+def test_runtime_supports_standard_database_url_fallback(monkeypatch):
+    monkeypatch.delenv("COMPLIANCE_DATABASE_URL", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/copilot")
+
+    runtime = resolve_database_runtime()
+
+    assert runtime.backend == "postgres"
+    assert runtime.target == "postgresql://localhost:5432/copilot"
+
+
+def test_runtime_prefers_compliance_database_url_over_generic_fallback(monkeypatch):
+    monkeypatch.setenv("COMPLIANCE_DATABASE_URL", "sqlite:////tmp/primary.db")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/copilot")
+
+    runtime = resolve_database_runtime()
+
+    assert runtime.backend == "sqlite"
+    assert runtime.target == "/tmp/primary.db"

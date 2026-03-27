@@ -139,6 +139,8 @@ This is the recommended approach for quick production deployment with minimal op
    COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS=false
    ```
 
+   `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, and `POSTGRES_URL_NON_POOLING` are also accepted if your provider injects those automatically.
+
 3. **Verify Deployment**
    ```bash
    curl https://your-backend.vercel.app/health
@@ -181,6 +183,7 @@ The backend requires a persistent database. SQLite on Vercel uses `/tmp/` which 
    vercel env add COMPLIANCE_DATABASE_URL production
    # Paste the connection string when prompted
    ```
+   If your provider or integration already injects `DATABASE_URL` or `POSTGRES_URL`, the backend will now use that automatically.
 6. Redeploy the backend
 
 #### Option B: AWS RDS
@@ -199,7 +202,7 @@ The backend requires a persistent database. SQLite on Vercel uses `/tmp/` which 
 - Render: https://render.com (free tier Postgres available)
 - Railway: https://railway.app (paid, $5/month minimum)
 
-All provide PostgreSQL connection strings compatible with the COMPLIANCE_DATABASE_URL format.
+All provide PostgreSQL connection strings compatible with `COMPLIANCE_DATABASE_URL`, and most also expose `DATABASE_URL` or `POSTGRES_URL` automatically.
 
 ### Migration & Verification
 
@@ -378,8 +381,9 @@ Local preview note:
 
 Current storage note:
 - The runtime is still backed by the SQLite implementation in [backend/app/db.py](backend/app/db.py)
-- `COMPLIANCE_DATABASE_URL` currently supports `sqlite:///...` URLs only
-- Postgres is the next migration target, but is not active in the current persistence layer yet
+- `COMPLIANCE_DATABASE_URL`, `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, and `POSTGRES_URL_NON_POOLING` are accepted
+- Postgres runtime is implemented and selected automatically when one of those URLs uses a `postgres://` or `postgresql://` scheme
+- Production still needs an actual managed Postgres connection string configured before persistence becomes durable
 
 ### Frontend (.env.local or Vercel settings)
 ```

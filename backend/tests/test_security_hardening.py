@@ -173,6 +173,7 @@ def test_ready_endpoint_degrades_for_ephemeral_sqlite_in_production(monkeypatch)
     assert "sqlite_in_production" in payload["warnings"]
     assert "ephemeral_sqlite_storage" in payload["warnings"]
     assert "COMPLIANCE_DATABASE_URL" in payload["recommended_action"]
+    assert "DATABASE_URL" in payload["recommended_action"]
 
 
 def test_preview_bootstrap_warning_is_explicit(monkeypatch):

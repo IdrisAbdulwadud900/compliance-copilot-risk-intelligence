@@ -28,7 +28,7 @@ Compliance Copilot combines wallet intelligence with analyst workflow:
 
 ### Prototype / partial capability today
 - **Base, Arbitrum, BSC, Polygon, and Solana** currently support analyst-driven/manual intelligence workflows better than fully live chain connectors
-- production backend is still using **ephemeral SQLite on Vercel** until `COMPLIANCE_DATABASE_URL` is set to managed Postgres
+- production backend is still using **ephemeral SQLite on Vercel** until a managed Postgres connection is set through `COMPLIANCE_DATABASE_URL`, `DATABASE_URL`, or `POSTGRES_URL`
 
 That means the product is good for demos, pilots, and workflow validation right now, but not yet at full enterprise reliability.
 
@@ -260,7 +260,7 @@ This audit checks docs, local stack health, backend tests, frontend build, walle
 If `/ready` returns:
 - `status: degraded`
 - `database.persistence: ephemeral`
-- `recommended_action` asking for `COMPLIANCE_DATABASE_URL`
+- `recommended_action` asking for `COMPLIANCE_DATABASE_URL` or `DATABASE_URL` / `POSTGRES_URL`
 
 then production is **not yet durable** and user/account data may be lost across deploys.
 
@@ -271,6 +271,7 @@ then production is **not yet durable** and user/account data may be lost across 
 - `COMPLIANCE_WEBHOOK_SECRET`
 - `COMPLIANCE_ALLOWED_ORIGINS`
 - `COMPLIANCE_DATABASE_URL`
+- `DATABASE_URL` or `POSTGRES_URL`
 - `COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP`
 - `COMPLIANCE_ENABLE_PREVIEW_AUTH_METHODS`
 
