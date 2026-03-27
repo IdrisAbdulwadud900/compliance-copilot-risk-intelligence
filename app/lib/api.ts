@@ -62,7 +62,7 @@ import type {
   WalletEnrichmentResponse,
 } from "@/lib/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000").trim();
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
 export const PREVIEW_AUTH_ENABLED = ["1", "true", "yes", "on"].includes(
   (process.env.NEXT_PUBLIC_ENABLE_PREVIEW_AUTH ?? "").trim().toLowerCase(),
