@@ -297,21 +297,3 @@ Right now this repo is strongest as:
 - a premium prototype
 
 It is **not yet a strong self-serve $1k/month SaaS** until durable storage and broader live chain coverage are finished.
-
-## Rate limiting (auth hardening)
-
-Backend supports basic IP-based rate limiting for sensitive auth endpoints.
-
-```env
-COMPLIANCE_RATE_LIMIT_ENABLED=true
-COMPLIANCE_RATE_LIMIT_WINDOW_SECONDS=60
-COMPLIANCE_RATE_LIMIT_AUTH_MAX_REQUESTS=10
-COMPLIANCE_RATE_LIMIT_INVITE_STATUS_MAX_REQUESTS=30
-```
-
-## Tests
-
-```bash
-cd "/Users/mac/Downloads/operation make money/backend"
-"/Users/mac/Downloads/operation make money/.venv/bin/python" -m pytest -q
-```
