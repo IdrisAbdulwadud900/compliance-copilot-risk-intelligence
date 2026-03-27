@@ -378,19 +378,11 @@ export async function acceptInvite(token: string, password: string): Promise<Log
   });
 
   if (!response.ok) {
-    throw new Error(`Accept invite failed: ${response.status}`);
+    throw new Error(await readApiError(response, "Could not accept the invite"));
   }
 
   const data = (await response.json()) as LoginResponse;
-  saveAuthToken(data.access_token);
-  if (typeof window !== "undefined") {
-    const session: SessionInfo = {
-      email: data.email,
-      tenant_id: data.tenant_id,
-      role: data.role,
-    };
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  }
+  persistSession(data);
   return data;
 }
 

@@ -49,6 +49,7 @@ from app.repositories.auth_repository import (
     create_invite as repository_create_invite,
     create_user as repository_create_user,
     create_user_if_not_exists as repository_create_user_if_not_exists,
+    get_user_by_email as repository_get_user_by_email,
     get_invite_status as repository_get_invite_status,
     hash_password as repository_hash_password,
     list_invites_by_tenant as repository_list_invites_by_tenant,
@@ -162,6 +163,10 @@ def create_user_if_not_exists(
     db_path: Optional[str] = None,
 ) -> TeamUser:
     return repository_create_user_if_not_exists(email, password, tenant_id, role, created_at, db_path)
+
+
+def get_user_by_email(email: str, db_path: Optional[str] = None) -> Optional[TeamUser]:
+    return repository_get_user_by_email(email, db_path)
 
 
 def list_users_by_tenant(tenant_id: str, db_path: Optional[str] = None) -> List[TeamUser]:

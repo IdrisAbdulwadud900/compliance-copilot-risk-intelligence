@@ -11,6 +11,7 @@ from app.db import (
     count_users,
     consume_invite,
     create_user_if_not_exists,
+    get_user_by_email,
     get_invite_status,
     save_audit_log,
     update_user_password,
@@ -91,6 +92,11 @@ def auth_signup(payload: SignupEmailRequest, request: Request) -> LoginResponse:
     created_at = datetime.now(timezone.utc).isoformat()
     tenant_id = _tenant_from_email(payload.email)
     normalized_email = payload.email.strip().lower()
+    if get_user_by_email(normalized_email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists. Sign in instead.",
+        )
     assigned_role: UserRole = "admin" if count_users() == 0 else payload.role
 
     create_user_if_not_exists(

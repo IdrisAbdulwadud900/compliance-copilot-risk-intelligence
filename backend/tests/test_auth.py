@@ -143,3 +143,27 @@ def test_second_signup_keeps_requested_role(tmp_path, monkeypatch):
     assert first.status_code == 200
     assert second.status_code == 200
     assert second.json()["role"] == "analyst"
+
+
+def test_duplicate_signup_returns_conflict(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "duplicate_signup.db")
+    monkeypatch.setenv("COMPLIANCE_DB_PATH", db_path)
+    monkeypatch.delenv("COMPLIANCE_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("COMPLIANCE_ADMIN_PASSWORD", raising=False)
+    monkeypatch.delenv("COMPLIANCE_ADMIN_TENANT", raising=False)
+    monkeypatch.delenv("COMPLIANCE_ENABLE_PREVIEW_BOOTSTRAP", raising=False)
+    monkeypatch.setenv("COMPLIANCE_JWT_SECRET", "unit-test-secret")
+
+    with TestClient(app) as client:
+        first = client.post(
+            "/auth/signup",
+            json={"email": "owner@company.com", "password": "StrongPass123!", "role": "analyst"},
+        )
+        second = client.post(
+            "/auth/signup",
+            json={"email": "owner@company.com", "password": "StrongPass123!", "role": "analyst"},
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert "already exists" in second.json()["detail"].lower()

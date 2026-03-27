@@ -91,6 +91,26 @@ def create_user_if_not_exists(
         )
 
 
+def get_user_by_email(email: str, db_path: Optional[str] = None) -> Optional[TeamUser]:
+    normalized = email.strip().lower()
+    with sqlite_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT id, email, tenant_id, role, created_at FROM users WHERE email = ?",
+            (normalized,),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    return TeamUser(
+        id=row["id"],
+        email=row["email"],
+        tenant_id=row["tenant_id"],
+        role=row["role"],
+        created_at=row["created_at"],
+    )
+
+
 def list_users_by_tenant(tenant_id: str, db_path: Optional[str] = None) -> List[TeamUser]:
     with sqlite_connection(db_path) as conn:
         rows = conn.execute(
