@@ -64,6 +64,7 @@ app.include_router(webhooks_router)
 
 @app.get("/")
 def root() -> dict[str, object]:
+    warnings = config_warnings()
     return {
         "status": "ok",
         "service": "crypto-compliance-copilot-api",
@@ -73,6 +74,8 @@ def root() -> dict[str, object]:
         "openapi_url": app.openapi_url,
         "health_url": "/health",
         "ready_url": "/ready",
+        "database": database_runtime_summary(),
+        "warnings": warnings,
     }
 
 
@@ -104,10 +107,16 @@ def ready() -> dict[str, object]:
         "checks": {
             "database": "ok" if db_ok else "error",
             "config": "ok" if not warnings else "warning",
+            "persistence": "ok" if "ephemeral_sqlite_storage" not in warnings else "warning",
         },
         "database": database_runtime_summary(),
         "migrations": migration_status_summary(),
         "warnings": warnings,
+        "recommended_action": (
+            "Set COMPLIANCE_DATABASE_URL to a managed PostgreSQL connection string and redeploy."
+            if has_critical_warnings
+            else "none"
+        ),
     }
 
 

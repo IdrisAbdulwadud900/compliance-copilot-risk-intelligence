@@ -74,9 +74,11 @@ def test_ready_endpoint_reports_warnings(tmp_path, monkeypatch):
         assert response.status_code == 200
         payload = response.json()
         assert payload["checks"]["database"] == "ok"
+        assert payload["checks"]["persistence"] == "ok"
         assert payload["migrations"]["up_to_date"] is True
         assert "warnings" in payload
         assert payload["status"] == "ok"
+        assert payload["recommended_action"] == "none"
 
 
 def test_health_sets_request_id_header(tmp_path, monkeypatch):
@@ -103,6 +105,8 @@ def test_root_endpoint_returns_service_metadata(tmp_path, monkeypatch):
     assert payload["health_url"] == "/health"
     assert payload["ready_url"] == "/ready"
     assert payload["docs_url"] == "/docs"
+    assert payload["database"]["backend"] == "sqlite"
+    assert payload["database"]["persistence"] == "local-disk"
 
 
 def test_private_webhook_url_rejected(tmp_path, monkeypatch):
@@ -164,8 +168,11 @@ def test_ready_endpoint_degrades_for_ephemeral_sqlite_in_production(monkeypatch)
     assert payload["status"] == "degraded"
     assert payload["checks"]["database"] == "ok"
     assert payload["checks"]["config"] == "warning"
+    assert payload["checks"]["persistence"] == "warning"
+    assert payload["database"]["persistence"] == "ephemeral"
     assert "sqlite_in_production" in payload["warnings"]
     assert "ephemeral_sqlite_storage" in payload["warnings"]
+    assert "COMPLIANCE_DATABASE_URL" in payload["recommended_action"]
 
 
 def test_preview_bootstrap_warning_is_explicit(monkeypatch):
@@ -189,5 +196,6 @@ def test_health_reports_database_runtime(tmp_path, monkeypatch):
         payload = response.json()
         assert payload["database"]["backend"] == "sqlite"
         assert payload["database"]["target"]
+        assert payload["database"]["persistence"] == "local-disk"
         assert payload["migrations"]["current_version"] >= 1
         assert payload["migrations"]["up_to_date"] is True

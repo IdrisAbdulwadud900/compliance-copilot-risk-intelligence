@@ -142,7 +142,10 @@ This is the recommended approach for quick production deployment with minimal op
 3. **Verify Deployment**
    ```bash
    curl https://your-backend.vercel.app/health
+   curl https://your-backend.vercel.app/ready
    ```
+   `/ready` should only be considered production-ready when it returns `"status":"ok"`.
+   If it returns `"degraded"` with `ephemeral_sqlite_storage`, the backend is still using non-durable storage.
 
 ### Frontend Setup on Vercel
 
@@ -206,7 +209,7 @@ Once the database is configured:
    ```bash
    curl https://your-backend.vercel.app/ready
    ```
-   Should show `"sqlite_in_production"` warning is gone.
+   Should show `"status":"ok"`, `"checks":{"persistence":"ok"}`, and `"sqlite_in_production"` / `"ephemeral_sqlite_storage"` warnings gone.
 
 2. **Check migrations**
    ```bash

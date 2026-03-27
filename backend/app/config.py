@@ -40,7 +40,10 @@ def database_backend() -> str:
 
 def database_runtime_summary() -> Dict[str, str]:
     runtime = resolve_database_runtime()
-    return {"backend": runtime.backend, "target": runtime.target}
+    persistence = "persistent"
+    if runtime.backend == "sqlite":
+        persistence = "ephemeral" if uses_ephemeral_sqlite_storage() else "local-disk"
+    return {"backend": runtime.backend, "target": runtime.target, "persistence": persistence}
 
 
 def uses_ephemeral_sqlite_storage() -> bool:
